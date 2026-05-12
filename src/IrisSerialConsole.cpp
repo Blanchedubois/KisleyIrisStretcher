@@ -1,0 +1,140 @@
+#include "IrisSerialConsole.h"
+#include <string.h>
+#include <stdlib.h>
+
+namespace kisley {
+namespace iris {
+
+IrisSerialConsole::IrisSerialConsole(IrisStretcher& stretcher, Stream& io)
+  : _stretcher(stretcher), _io(io) {}
+
+void IrisSerialConsole::begin() {
+  printBanner();
+  printHelp();
+}
+
+void IrisSerialConsole::printBanner() {
+  _io.println(" ___      _       ____  _            _       _               ");
+  _io.println("|_ _|_ __(_)___  / ___|| |_ _ __ ___| |_ ___| |__   ___ _ __ ");
+  _io.println(" | || '__| / __| \\___ \\| __| '__/ _ \\ __/ __| '_ \\ / _ \\ '__|");
+  _io.println(" | || |  | \\__ \\  ___) | |_| | |  __/ || (__| | | |  __/ |   ");
+  _io.println("|___|_|  |_|___/ |____/ \\__|_|  \\___|\\__\\___|_| |_|\\___|_|   ");
+  _io.println("+===============+");
+  _io.println(_bannerLine);
+  _io.println("+===============+");
+}
+
+void IrisSerialConsole::printHelp() {
+  _io.println("Commands:");
+  _io.println("________");
+  _io.println(" Xgoto <value>        \xe2\x80\x93 move to Target Expansion");
+  _io.println(" Xzero                \xe2\x80\x93 drive motor to zero Position");
+  _io.println(" XsetZero             \xe2\x80\x93 reset position counter to 0");
+  _io.println(" Xcalibrate           \xe2\x80\x93 run calibration routine");
+  _io.println(" Xspeed <value> cm/s  \xe2\x80\x93 changes expansion speed (cm/s approx)");
+  _io.println(" Xhelp                \xe2\x80\x93 this message");
+  for (uint8_t i = 0; i < _customCount; i++) {
+    if (_custom[i].help) {
+      _io.print(" X");
+      _io.print(_custom[i].name);
+      _io.print("  \xe2\x80\x93 ");
+      _io.println(_custom[i].help);
+    }
+  }
+}
+
+bool IrisSerialConsole::registerCommand(const char* name,
+                                        const char* helpLine,
+                                        CommandCallback cb,
+                                        void* user) {
+  if (!name || !cb) return false;
+  if (_customCount >= MAX_CUSTOM_CMDS) return false;
+  _custom[_customCount++] = {name, helpLine, cb, user};
+  return true;
+}
+
+void IrisSerialConsole::update() {
+  while (_io.available() && !_ready) {
+    char c = (char)_io.read();
+    if (c == '\n' || c == '\r') {
+      if (_idx > 0) {
+        _buf[_idx] = '\0';
+        _ready = true;
+      }
+    } else if (_idx < MAX_CMD_LEN - 1) {
+      _buf[_idx++] = c;
+    }
+  }
+  if (_ready) {
+    parseCommand();
+    _idx = 0;
+    _ready = false;
+  }
+}
+
+void IrisSerialConsole::parseCommand() {
+  if (_buf[0] != 'X') {
+    _io.println("Invalid prefix. Commands must start with 'X'.");
+    return;
+  }
+  char* p   = _buf + 1;
+  char* cmd = strtok(p, " ");
+  if (!cmd) return;
+
+  if (dispatchBuiltin(cmd, nullptr)) return;
+
+  // Custom commands
+  for (uint8_t i = 0; i < _customCount; i++) {
+    if (strcmp(cmd, _custom[i].name) == 0) {
+      char* rest = strtok(nullptr, "");        // remainder of line
+      _custom[i].cb(rest ? rest : "", _custom[i].user);
+      return;
+    }
+  }
+
+  _io.print("Unknown command: ");
+  _io.println(cmd);
+}
+
+bool IrisSerialConsole::dispatchBuiltin(const char* cmd, char* /*tokState*/) {
+  if (strcmp(cmd, "goto") == 0) {
+    char* arg = strtok(nullptr, " ");
+    if (!arg) { _io.println("Usage: Xgoto <targetEx>"); return true; }
+    _stretcher.gotoExpansion(atof(arg));
+    return true;
+  }
+  if (strcmp(cmd, "zero") == 0) {
+    _stretcher.goToZero();
+    return true;
+  }
+  if (strcmp(cmd, "setZero") == 0) {
+    _stretcher.setZeroHere();
+    return true;
+  }
+  if (strcmp(cmd, "help") == 0) {
+    printHelp();
+    return true;
+  }
+  if (strcmp(cmd, "calibrate") == 0) {
+    _stretcher.calibrate();
+    return true;
+  }
+  if (strcmp(cmd, "speed") == 0) {
+    char* arg = strtok(nullptr, " ");
+    if (!arg) { _io.println("Usage: Xspeed <bladeSpeed_cm/s>"); return true; }
+    const double sb = atof(arg);
+    if (sb <= 0.0) {
+      _io.println("Error: speed must be > 0");
+    } else {
+      _io.print("Blade speed set to: ");
+      _io.print(sb, 4);
+      _io.println(" cm/s");
+      _stretcher.setBladeSpeed(sb);
+    }
+    return true;
+  }
+  return false;
+}
+
+} // namespace iris
+} // namespace kisley

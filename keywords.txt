@@ -1,0 +1,41 @@
+#######################################
+# KisleyIrisStretcher syntax highlighting
+#######################################
+
+#######################################
+# Classes (KEYWORD1)
+#######################################
+
+IrisStretcher	KEYWORD1
+IrisMenuUI	KEYWORD1
+IrisSerialConsole	KEYWORD1
+IrisGeometry	KEYWORD1
+IrisStepperDriver	KEYWORD1
+IrisKinematics	KEYWORD1
+IrisStrainNAU7802	KEYWORD1
+
+#######################################
+# Methods (KEYWORD2)
+#######################################
+
+begin	KEYWORD2
+update	KEYWORD2
+gotoExpansion	KEYWORD2
+goToZero	KEYWORD2
+setZeroHere	KEYWORD2
+calibrate	KEYWORD2
+setBladeSpeed	KEYWORD2
+rotateThetaRadians	KEYWORD2
+currentSteps	KEYWORD2
+currentTheta	KEYWORD2
+computeEx	KEYWORD2
+findTheta	KEYWORD2
+onEachStep	KEYWORD2
+setStepLogging	KEYWORD2
+setCalibrationRoutine	KEYWORD2
+setInvertEncoder	KEYWORD2
+setUseInternalPulldown	KEYWORD2
+registerMenuItem	KEYWORD2
+registerCommand	KEYWORD2
+readVolts	KEYWORD2
+printBanner	KEYWORD2
