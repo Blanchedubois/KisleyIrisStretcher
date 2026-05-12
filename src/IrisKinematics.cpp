@@ -36,10 +36,29 @@ double IrisKinematics::computeEx(const IrisGeometry& geo, double Theta) {
   return (sqrt(underRoot) - rPin) / (E0 - rPin);
 }
 
-double IrisKinematics::findTheta(const IrisGeometry& geo,
-                                 double targetEx,
-                                 double thetaLow,
-                                 double thetaHigh) {
+double IrisKinematics::findTheta(const IrisGeometry& geo, double targetEx) {
+  // Center: θ = 0 by definition.
+  if (fabs(targetEx - 1.0) < 1e-9) return 0.0;
+
+  if (targetEx > 1.0) {
+    // Expansion: original CW bracket.
+    return findThetaInBracket(geo, targetEx, 0.0001, 0.6);
+  }
+
+  // Contraction: mirror around 1.0 and negate. The kinematic model
+  // doesn't produce Eₓ < 1 naturally — walking θ past the singularity
+  // gives Eₓ values >> 1, not below. Convention: a CCW move by the
+  // same angle magnitude that a CW move would use to reach (2 − Eₓ).
+  const double mirroredTarget = 2.0 - targetEx;
+  const double theta = findThetaInBracket(geo, mirroredTarget, 0.0001, 0.6);
+  if (isnan(theta)) return NAN;
+  return -theta;
+}
+
+double IrisKinematics::findThetaInBracket(const IrisGeometry& geo,
+                                          double targetEx,
+                                          double thetaLow,
+                                          double thetaHigh) {
   // Bracket check.
   double fLow  = computeEx(geo, thetaLow)  - targetEx;
   double fHigh = computeEx(geo, thetaHigh) - targetEx;

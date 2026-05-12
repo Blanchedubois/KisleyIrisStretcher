@@ -12,7 +12,8 @@ struct IrisGeometry {
   float Y0     = -6.1f;    // mm — must remain negative
   float rPin   = 0.5f;     // mm — pin offset for the expansion ratio
   float g      = 15.0f;    // gear ratio
-  float maxEx  = 4.2f;     // safety clamp for Xgoto
+  float minEx  = 0.5f;     // safety clamp for Xgoto on the CCW (contraction) side
+  float maxEx  = 4.2f;     // safety clamp for Xgoto on the CW (expansion) side
   uint16_t pulsesPerRev = 1600; // microsteps per output revolution
 
   // Blade-arm radius in cm. Used to convert blade linear speed (cm/s) into

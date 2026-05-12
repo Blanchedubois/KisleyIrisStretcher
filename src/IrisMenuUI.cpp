@@ -199,20 +199,30 @@ void IrisMenuUI::printFloatFixed(float v, uint8_t places) {
 
 void IrisMenuUI::drawEditXspeed() {
   _lcd.clear();
-  _lcd.setCursor(0, 0); _lcd.print("Xspeed:");
+  _lcd.setCursor(0, 0);
+  _lcd.print("Xspeed:");
+  _lcd.print(_xSpeedFineMode ? " F" : " C");
   _lcd.setCursor(0, 1);
   printFloatFixed(_xSpeedValue, _xSpeedFineMode ? 2 : 1);
-  _lcd.print(_xSpeedFineMode ? " F" : " C");
-  _lcd.print("  [SW]");
+  _lcd.print(" [SW]");
 }
 
 void IrisMenuUI::drawEditXgoto() {
   _lcd.clear();
-  _lcd.setCursor(0, 0); _lcd.print("Xgoto:");
+  _lcd.setCursor(0, 0);
+  _lcd.print("Xgoto:");
+  _lcd.print(_xGotoFineMode ? " F" : " C");
   _lcd.setCursor(0, 1);
   printFloatFixed(_xGotoValue, _xGotoFineMode ? 3 : 2);
-  _lcd.print(_xGotoFineMode ? " F" : " C");
-  _lcd.print("  [SW]");
+  // Direction tag — fixed 5 chars so the [SW] hint always lands at column 11.
+  if (_xGotoValue > 1.0f + 1e-6f) {
+    _lcd.print(" CW  ");
+  } else if (_xGotoValue < 1.0f - 1e-6f) {
+    _lcd.print(" CCW ");
+  } else {
+    _lcd.print("     ");
+  }
+  _lcd.print("[SW]");
 }
 
 // ---- Help / About paging ----
@@ -430,7 +440,7 @@ void IrisMenuUI::update() {
         drawEditXgoto();
       }
       const float step = _xGotoFineMode ? xGotoStepFine : xGotoStepCoarse;
-      const float goMin = 1.001f;
+      const float goMin = _stretcher.geometry().minEx;
       const float goMax = _stretcher.geometry().maxEx;
       if (ed == +1) {
         _xGotoValue = constrain(roundToStep(_xGotoValue + step, step), goMin, goMax);

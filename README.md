@@ -70,12 +70,22 @@ responses.
 
 | Command | Effect |
 |---|---|
-| `Xgoto <Ex>` | Solve θ for target expansion and move there |
+| `Xgoto <Ex>` | Bidirectional. `Ex > 1` → CW (expansion); `Ex < 1` → CCW (contraction); `Ex = 1.0` → return to center (θ=0). Range is `[minEx, maxEx]` from geometry. |
 | `Xzero` | Drive the motor back to θ = 0 |
 | `XsetZero` | Reset the position counter to 0 at the current pose |
 | `Xcalibrate` | Run the calibration routine |
 | `Xspeed <cm/s>` | Set blade speed (recomputes step delay) |
 | `Xhelp` | Print this list |
+
+**On the LCD**, the Xgoto edit screen shows the value with a direction tag:
+`"1.350 CW [SW]"`, `"0.760 CCW [SW]"`, or `"1.000     [SW]"` at center.
+Step count is signed and absolute, so going `1.3 → 0.7 → 1.3` lands back
+on the same step position as the first 1.3 move.
+
+See `BIDIRECTIONAL_XGOTO.md` for the kinematic rationale — the model only
+naturally produces `Ex > 1`, so contraction targets use a mirror
+convention (solve for `2 − Ex` on the CW bracket, then negate). Verify
+on your rig that CCW motion physically contracts the iris.
 
 ## Wiring
 

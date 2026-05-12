@@ -132,7 +132,7 @@ private:
 
   // ---- Edit values ----
   float _xSpeedValue = 1.0f;
-  float _xGotoValue  = 1.500f;
+  float _xGotoValue  = 1.000f;   // start at the center (Ex=1.0)
   bool  _xSpeedFineMode = false;
   bool  _xGotoFineMode  = false;
 

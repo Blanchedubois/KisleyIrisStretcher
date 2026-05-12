@@ -25,16 +25,43 @@ void IrisStretcher::rotateThetaRadians(double theta) {
 }
 
 bool IrisStretcher::gotoExpansion(double targetEx) {
+  if (targetEx <= _geo.minEx || targetEx >= _geo.maxEx) {
+    _io.print("Error: targetEx out of range [");
+    _io.print(_geo.minEx, 3);
+    _io.print(", ");
+    _io.print(_geo.maxEx, 3);
+    _io.println("]");
+    return false;
+  }
+
+  // Center: short-circuit straight to θ=0 (back to the saved zero step).
+  if (fabs(targetEx - 1.0) < 1e-6) {
+    _io.println("Target is center (Ex=1.0); returning to \xce\xb8=0.");
+    rotateThetaRadians(0.0);
+    return true;
+  }
+
   const double angle = findTheta(targetEx);
-  if (targetEx <= 1.001 || targetEx >= _geo.maxEx || isnan(angle)) {
+  if (isnan(angle)) {
     _io.println("Error: no valid \xce\xb8 found for that targetEx");
     return false;
   }
+
+  _io.print("Target Ex: ");
+  _io.print(targetEx, 6);
+  _io.println(targetEx > 1.0 ? " (CW)" : " (CCW)");
   _io.print("Computed \xce\xb8 (rad): ");
   _io.println(angle, 10);
-  const double actualEx = computeEx(angle);
+
+  // Forward-kinematic verification only roundtrips for the CW branch.
+  // For CCW (mirror convention) we just echo the target.
   _io.print("Resulting expansion: ");
-  _io.println(actualEx, 10);
+  if (targetEx > 1.0) {
+    _io.println(computeEx(angle), 10);
+  } else {
+    _io.println(targetEx, 10);
+  }
+
   rotateThetaRadians(angle);
   return true;
 }
