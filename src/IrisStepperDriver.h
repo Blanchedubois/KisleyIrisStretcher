@@ -25,10 +25,11 @@ public:
   void setStepHalfPeriodUs(unsigned long us) { _stepHalfPeriodUs = us; }
   unsigned long stepHalfPeriodUs() const     { return _stepHalfPeriodUs; }
 
-  // Position bookkeeping.
-  long currentPosition() const          { return _stepper.currentPosition(); }
+  // Position bookkeeping. Not const because AccelStepper::currentPosition()
+  // is not declared const upstream.
+  long currentPosition()                 { return _stepper.currentPosition(); }
   void setCurrentPosition(long position) { _stepper.setCurrentPosition(position); }
-  double currentTheta(const IrisGeometry& geo) const;
+  double currentTheta(const IrisGeometry& geo);
 
   // Optional per-step callback invoked from inside the move loop.
   void onEachStep(StepCallback cb, void* user = nullptr) {

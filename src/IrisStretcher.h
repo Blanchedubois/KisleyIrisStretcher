@@ -45,8 +45,8 @@ public:
 
   // ---- Low-level escape hatches ----
   void   rotateThetaRadians(double theta);
-  long   currentSteps() const          { return _driver.currentPosition(); }
-  double currentTheta() const          { return _driver.currentTheta(_geo); }
+  long   currentSteps()                { return _driver.currentPosition(); }
+  double currentTheta()                { return _driver.currentTheta(_geo); }
   double computeEx(double theta) const { return IrisKinematics::computeEx(_geo, theta); }
   double findTheta(double targetEx) const { return IrisKinematics::findTheta(_geo, targetEx); }
 

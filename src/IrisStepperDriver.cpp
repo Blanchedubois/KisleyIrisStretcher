@@ -45,7 +45,7 @@ long IrisStepperDriver::rotateThetaRadians(const IrisGeometry& geo, double theta
   return deltaSteps;
 }
 
-double IrisStepperDriver::currentTheta(const IrisGeometry& geo) const {
+double IrisStepperDriver::currentTheta(const IrisGeometry& geo) {
   const double stepsPerRad = (double(geo.pulsesPerRev) * geo.g) / (2.0 * M_PI);
   return (double)_stepper.currentPosition() / stepsPerRad;
 }
