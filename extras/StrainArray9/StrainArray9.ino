@@ -16,6 +16,7 @@
 #include "USB.h"
 #include <Wire.h>
 #include <Adafruit_NAU7802.h>
+#include <math.h>
 
 // ====================== Configuration ======================
 static constexpr int       PIN_SDA      = 3;
@@ -47,7 +48,16 @@ Adafruit_NAU7802 nau;
 bool    g_present[N_ADCS]  = {false};
 int32_t g_baseline[N_ADCS] = {0};      // captured at boot; subtracted from every stream value
 
-static constexpr uint8_t TARE_SAMPLES = 16;   // samples averaged per ADC at boot
+static constexpr uint8_t  TARE_SAMPLES     = 16;   // samples averaged per ADC at boot
+static constexpr uint16_t SIGNAL_AVERAGING = 4;    // samples per ADC per output row (1..256)
+
+// One CSV row's worth of acquired data.
+struct Row {
+  uint32_t t_ms;
+  int32_t  mean[N_ADCS];
+  float    std [N_ADCS];
+  bool     present[N_ADCS];
+};
 
 // ====================== I2C primitives ======================
 
@@ -158,6 +168,64 @@ static bool readOneChip(uint8_t i, int32_t &out) {
   return true;
 }
 
+// ====================== Signal-averaged acquisition ======================
+//
+// Round-robin: each pass visits every present ADC once, total
+// SIGNAL_AVERAGING passes. Spacing samples across channels rather than
+// reading one chip N times then the next keeps the N-sample window roughly
+// co-temporal between channels. Tracks Σx and Σx² per channel in int64 so
+// we can compute Bessel-corrected sample stdev without intermediate overflow.
+static void acquireRow(Row &row) {
+  row.t_ms = millis();
+
+  int64_t  sum  [N_ADCS] = {0};
+  int64_t  sumsq[N_ADCS] = {0};
+  uint16_t count[N_ADCS] = {0};
+
+  for (uint16_t pass = 0; pass < SIGNAL_AVERAGING; pass++) {
+    for (uint8_t i = 0; i < N_ADCS; i++) {
+      if (!g_present[i]) continue;
+      int32_t raw;
+      if (readOneChipRaw(i, raw)) {
+        const int64_t zeroed = (int64_t)raw - (int64_t)g_baseline[i];
+        sum[i]   += zeroed;
+        sumsq[i] += zeroed * zeroed;
+        count[i] += 1;
+      }
+    }
+  }
+
+  for (uint8_t i = 0; i < N_ADCS; i++) {
+    row.present[i] = g_present[i] && (count[i] > 0);
+    if (!row.present[i]) {
+      row.mean[i] = 0;
+      row.std[i]  = 0.0f;
+      continue;
+    }
+
+    // Mean with round-half-away-from-zero.
+    const int64_t  s = sum[i];
+    const uint16_t n = count[i];
+    int64_t q = s / (int64_t)n;
+    int64_t r = s - q * (int64_t)n;
+    if (r >  (int64_t)n / 2)        q += 1;
+    else if (r < -(int64_t)n / 2)   q -= 1;
+    row.mean[i] = (int32_t)q;
+
+    // Bessel-corrected sample stdev:  var = (Σx² − (Σx)²/n) / (n−1)
+    if (n <= 1) {
+      row.std[i] = 0.0f;
+    } else {
+      const double dS  = (double)s;
+      const double dSS = (double)sumsq[i];
+      const double dN  = (double)n;
+      double var = (dSS - (dS * dS) / dN) / (dN - 1.0);
+      if (var < 0.0) var = 0.0;            // FP noise floor
+      row.std[i] = (float)sqrt(var);
+    }
+  }
+}
+
 // ====================== Host-side tare ======================
 //
 // Captures TARE_SAMPLES per chip and stores the mean as the baseline.
@@ -234,27 +302,42 @@ void setup() {
   // be raw minus baseline so each column sits near zero at rest.
   tareAllAdcs();
 
-  Serial.println(F("# Streaming CSV (zeroed)..."));
+  Serial.print  (F("# Signal averaging: ")); Serial.print(SIGNAL_AVERAGING);
+  Serial.println(F(" samples per chip per row"));
+  Serial.println(F("# Streaming CSV (zeroed, mean + sample stdev per ADC)..."));
   Serial.print(F("t_ms"));
   for (uint8_t i = 0; i < N_ADCS; i++) {
     Serial.print(',');
     Serial.print(LAYOUT[i].label);
+    Serial.print(F("_mean,"));
+    Serial.print(LAYOUT[i].label);
+    Serial.print(F("_std"));
   }
   Serial.println();
 }
 
 void loop() {
   uint32_t rowStart = millis();
-  Serial.print(rowStart);
+
+  Row row;
+  acquireRow(row);
+
+  Serial.print(row.t_ms);
   for (uint8_t i = 0; i < N_ADCS; i++) {
     Serial.print(',');
-    int32_t v;
-    if (readOneChip(i, v)) Serial.print(v);
-    else                   Serial.print(F("NaN"));
+    if (!row.present[i]) {
+      Serial.print(F("NaN,NaN"));
+    } else {
+      Serial.print(row.mean[i]);
+      Serial.print(',');
+      Serial.print(row.std[i], 2);
+    }
   }
   Serial.println();
 
-  // Hold a steady row period.
+  // Hold a steady row period. Acquisition already takes ~SIGNAL_AVERAGING ×
+  // 100 ms at 10 SPS; if that's already longer than ROW_PERIOD_MS, this
+  // delay is a no-op and rows just stream as fast as the chips produce data.
   uint32_t elapsed = millis() - rowStart;
   if (elapsed < ROW_PERIOD_MS) delay(ROW_PERIOD_MS - elapsed);
 }
