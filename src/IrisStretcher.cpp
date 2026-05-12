@@ -24,42 +24,50 @@ void IrisStretcher::rotateThetaRadians(double theta) {
   _io.println(_driver.currentPosition());
 }
 
-bool IrisStretcher::gotoExpansion(double targetEx) {
-  if (targetEx <= _geo.minEx || targetEx >= _geo.maxEx) {
-    _io.print("Error: targetEx out of range [");
-    _io.print(_geo.minEx, 3);
-    _io.print(", ");
-    _io.print(_geo.maxEx, 3);
-    _io.println("]");
-    return false;
-  }
+bool IrisStretcher::gotoExpansion(double signedEx) {
+  // Convention: |signedEx| is the magnitude in [1.0, maxEx]. Sign of
+  // signedEx selects rotation direction — positive = CW, negative = CCW.
+  // Both directions cover the same range; CCW rotates by the same θ
+  // magnitude as the matching CW value but in the opposite direction.
+  const double magnitude = fabs(signedEx);
 
-  // Center: short-circuit straight to θ=0 (back to the saved zero step).
-  if (fabs(targetEx - 1.0) < 1e-6) {
-    _io.println("Target is center (Ex=1.0); returning to \xce\xb8=0.");
+  // Center: |Ex| ≤ 1.0 means return to the zero step. Treat both 0 and
+  // ±1.0 as "go to center" so the LCD's CCW path can also commit center.
+  if (magnitude < 1.0 + 1e-6) {
+    _io.println("Target is center; returning to \xce\xb8=0.");
     rotateThetaRadians(0.0);
     return true;
   }
 
-  const double angle = findTheta(targetEx);
-  if (isnan(angle)) {
+  if (magnitude >= _geo.maxEx) {
+    _io.print("Error: |Ex| out of range [1.0, ");
+    _io.print(_geo.maxEx, 3);
+    _io.println(")");
+    return false;
+  }
+
+  const double posTheta = findTheta(magnitude);   // always positive
+  if (isnan(posTheta)) {
     _io.println("Error: no valid \xce\xb8 found for that targetEx");
     return false;
   }
 
+  const bool   cw = (signedEx >= 0.0);
+  const double angle = cw ? posTheta : -posTheta;
+
   _io.print("Target Ex: ");
-  _io.print(targetEx, 6);
-  _io.println(targetEx > 1.0 ? " (CW)" : " (CCW)");
+  _io.print(magnitude, 6);
+  _io.println(cw ? " (CW)" : " (CCW)");
   _io.print("Computed \xce\xb8 (rad): ");
   _io.println(angle, 10);
 
-  // Forward-kinematic verification only roundtrips for the CW branch.
-  // For CCW (mirror convention) we just echo the target.
+  // Forward-kinematic verification only roundtrips for the CW branch
+  // (the model has no Eₓ<1 domain). For CCW we just echo the magnitude.
   _io.print("Resulting expansion: ");
-  if (targetEx > 1.0) {
+  if (cw) {
     _io.println(computeEx(angle), 10);
   } else {
-    _io.println(targetEx, 10);
+    _io.println(magnitude, 10);
   }
 
   rotateThetaRadians(angle);

@@ -70,22 +70,29 @@ responses.
 
 | Command | Effect |
 |---|---|
-| `Xgoto <Ex>` | Bidirectional. `Ex > 1` → CW (expansion); `Ex < 1` → CCW (contraction); `Ex = 1.0` → return to center (θ=0). Range is `[minEx, maxEx]` from geometry. |
+| `Xgoto <Ex> [cw\|ccw]` | Move to magnitude `Ex` in `[1.0, maxEx]`. Direction defaults to `cw`; `ccw` rotates the motor the same θ magnitude in the opposite direction. `Ex` at or below 1.0 returns to center (θ=0). |
 | `Xzero` | Drive the motor back to θ = 0 |
 | `XsetZero` | Reset the position counter to 0 at the current pose |
 | `Xcalibrate` | Run the calibration routine |
 | `Xspeed <cm/s>` | Set blade speed (recomputes step delay) |
 | `Xhelp` | Print this list |
 
-**On the LCD**, the Xgoto edit screen shows the value with a direction tag:
-`"1.350 CW [SW]"`, `"0.760 CCW [SW]"`, or `"1.000     [SW]"` at center.
-Step count is signed and absolute, so going `1.3 → 0.7 → 1.3` lands back
-on the same step position as the first 1.3 move.
+**On the LCD**, the Xgoto edit screen shows magnitude + direction:
+`"1.350 CW  [SW]"` or `"1.350 CCW [SW]"`. The encoder edits magnitude
+(range `[1.0, maxEx]`); the **DOWN** button toggles CW ↔ CCW; **SW**
+toggles fine/coarse; **ACCEPT** commits.
 
-See `BIDIRECTIONAL_XGOTO.md` for the kinematic rationale — the model only
-naturally produces `Ex > 1`, so contraction targets use a mirror
-convention (solve for `2 − Ex` on the CW bracket, then negate). Verify
-on your rig that CCW motion physically contracts the iris.
+Step count is signed and absolute, so a round-trip
+`1.3 CW → 1.0 → 1.3 CW` lands on byte-identical step positions, and
+`1.3 CW → 1.3 CCW` lands on exactly mirrored steps. See
+`BIDIRECTIONAL_XGOTO.md` for the kinematic rationale.
+
+**API equivalent** for programmatic use:
+```cpp
+stretcher.gotoExpansion( 1.35);  // CW
+stretcher.gotoExpansion(-1.35);  // CCW (same θ magnitude, opposite direction)
+stretcher.gotoExpansion( 1.0);   // center
+```
 
 ## Wiring
 

@@ -132,9 +132,10 @@ private:
 
   // ---- Edit values ----
   float _xSpeedValue = 1.0f;
-  float _xGotoValue  = 1.000f;   // start at the center (Ex=1.0)
+  float _xGotoValue  = 1.000f;   // magnitude, range [1.0, maxEx]
   bool  _xSpeedFineMode = false;
   bool  _xGotoFineMode  = false;
+  bool  _xGotoDirCw     = true;  // CW default; toggled by DOWN button in edit screen
 
   // ---- Help/About paging ----
   IrisAboutInfo  _about;

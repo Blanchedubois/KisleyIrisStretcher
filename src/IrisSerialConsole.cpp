@@ -5,6 +5,20 @@
 namespace kisley {
 namespace iris {
 
+namespace {
+// Case-insensitive equality for short ASCII tokens. Arduino doesn't
+// portably provide strcasecmp, so we hand-roll one.
+bool ieq(const char* a, const char* b) {
+  while (*a && *b) {
+    char ca = (*a >= 'A' && *a <= 'Z') ? char(*a + 32) : *a;
+    char cb = (*b >= 'A' && *b <= 'Z') ? char(*b + 32) : *b;
+    if (ca != cb) return false;
+    a++; b++;
+  }
+  return *a == *b;
+}
+} // namespace
+
 IrisSerialConsole::IrisSerialConsole(IrisStretcher& stretcher, Stream& io)
   : _stretcher(stretcher), _io(io) {}
 
@@ -27,7 +41,7 @@ void IrisSerialConsole::printBanner() {
 void IrisSerialConsole::printHelp() {
   _io.println("Commands:");
   _io.println("________");
-  _io.println(" Xgoto <value>        \xe2\x80\x93 move to Target Expansion");
+  _io.println(" Xgoto <Ex> [cw|ccw]  \xe2\x80\x93 move to Ex magnitude (CW default)");
   _io.println(" Xzero                \xe2\x80\x93 drive motor to zero Position");
   _io.println(" XsetZero             \xe2\x80\x93 reset position counter to 0");
   _io.println(" Xcalibrate           \xe2\x80\x93 run calibration routine");
@@ -99,8 +113,23 @@ void IrisSerialConsole::parseCommand() {
 bool IrisSerialConsole::dispatchBuiltin(const char* cmd, char* /*tokState*/) {
   if (strcmp(cmd, "goto") == 0) {
     char* arg = strtok(nullptr, " ");
-    if (!arg) { _io.println("Usage: Xgoto <targetEx>"); return true; }
-    _stretcher.gotoExpansion(atof(arg));
+    if (!arg) { _io.println("Usage: Xgoto <Ex> [cw|ccw]"); return true; }
+    const double magnitude = atof(arg);
+
+    // Optional direction token; defaults to CW.
+    char* dirArg = strtok(nullptr, " ");
+    bool cw = true;
+    if (dirArg) {
+      if      (ieq(dirArg, "ccw")) cw = false;
+      else if (ieq(dirArg, "cw"))  cw = true;
+      else {
+        _io.print("Unknown direction: "); _io.println(dirArg);
+        _io.println("Usage: Xgoto <Ex> [cw|ccw]");
+        return true;
+      }
+    }
+
+    _stretcher.gotoExpansion(cw ? magnitude : -magnitude);
     return true;
   }
   if (strcmp(cmd, "zero") == 0) {

@@ -12,25 +12,26 @@ namespace iris {
 // promoting to double makes those tolerances meaningful and is free on
 // the ESP32-S3 FPU.
 //
-// Bidirectional Eₓ:
-//   findTheta() handles Eₓ > 1 (CW), Eₓ < 1 (CCW), and Eₓ == 1 (center).
-//   The kinematic model only naturally produces Eₓ > 1, so contraction
-//   targets are mapped via mirror symmetry: solve for (2 − Eₓ) and
-//   negate the result. See BIDIRECTIONAL_XGOTO.md §"Locked decisions".
+// The kinematic model only naturally produces Eₓ > 1 from positive θ.
+// For "CCW expansion" — driving the motor by the same θ magnitude in
+// the opposite direction — callers (IrisStretcher) negate the result
+// of findTheta. The math itself stays single-sided.
 class IrisKinematics {
 public:
   // Forward map: θ (radians) → Eₓ (dimensionless expansion ratio).
   // Returns NaN if the geometry has no real solution at this θ.
   static double computeEx(const IrisGeometry& geo, double theta);
 
-  // Inverse map: target Eₓ → θ (signed). Dispatches based on whether
-  // the target is above, below, or equal to 1.0. Returns NaN if no
-  // solution exists.
-  static double findTheta(const IrisGeometry& geo, double targetEx);
+  // Inverse map: target Eₓ (must be > 1.0) → positive θ. Returns NaN
+  // if Eₓ ≤ 1 or no bracket exists. Default bracket [0.0001, 0.6] rad.
+  static double findTheta(const IrisGeometry& geo,
+                          double targetEx,
+                          double thetaLow  = 0.0001,
+                          double thetaHigh = 0.6);
 
-  // Low-level inverse: solve only within an explicit θ bracket.
-  // Bisection (50 iter) then Newton-Raphson (50 iter). Returns NaN if
-  // the target is not bracketed.
+  // Low-level: solve within an explicit θ bracket. Bisection (50 iter)
+  // then Newton-Raphson (50 iter). Returns NaN if target is not
+  // bracketed.
   static double findThetaInBracket(const IrisGeometry& geo,
                                    double targetEx,
                                    double thetaLow,

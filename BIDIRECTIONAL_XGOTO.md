@@ -7,30 +7,44 @@
 
 ---
 
-## Locked decisions (2026-05-12)
+## Locked decisions — revised 2026-05-12
 
-1. **Internal `Ex` semantics**: the value passed to `gotoExpansion` /
-   `Xgoto` is the actual expansion ratio. `> 1.0` = expansion (CW),
-   `< 1.0` = contraction (CCW), `= 1.0` = center. No magnitude-only
-   or signed-deviation encoding.
-2. **Kinematic story chosen: B (mirror symmetry).** Story A doesn't
-   actually work — walking `computeEx(Θ)` past the singularity at
-   `Θ=0` produces `Ex` values far above 1, not below. The original
-   kinematic model has no natural `Ex < 1` branch. Therefore for
-   `targetEx < 1` the library solves for `(2 − targetEx)` (which is
-   > 1) on the existing positive-θ bracket and **negates the
-   result**. Physically: a CCW move by the same angle magnitude that
-   a CW move would use to reach `2 − targetEx` expansion. This is a
-   convention the firmware imposes; it depends on the rig actually
-   behaving symmetrically when the motor reverses. Verify in §6.
-3. **`minEx = 0.5`**. Defaults to half-size contraction floor;
-   override per rig via `IrisGeometry::minEx`.
-4. **GUI display format**: `"X.XXX CW F [SW]"`, `"X.XXX CCW F [SW]"`,
-   or `"X.XXX     F [SW]"` (center). The displayed `X.XXX` is the
-   real `Ex`, never a magnitude-shifted value — the encoder's value
-   moves linearly through 1.0, with only the direction tag flipping.
-5. **Serial behavior**: `Xgoto 1.35` → expansion CW. `Xgoto 0.76` →
-   contraction CCW. `Xgoto 1.0` → return to center (θ=0).
+The earlier "mirror-via-Ex-domain" scheme (where `Ex < 1` meant real
+contraction) is **superseded**. New convention: input is always a
+**magnitude in `[1.0, maxEx]`** plus a **direction tag**. CCW range
+mirrors CW range — both go from 1.0 up to `maxEx`.
+
+1. **Signed-value API.** `IrisStretcher::gotoExpansion(double signedEx)`
+   uses the **sign** to select direction:
+   - `signedEx > 0` → CW, motor θ = `+findTheta(|signedEx|)`
+   - `signedEx < 0` → CCW, motor θ = `−findTheta(|signedEx|)`
+   - `|signedEx| ≤ 1.0` → return to center (θ = 0)
+   - `|signedEx| ≥ maxEx` → out-of-range error
+2. **Kinematic story is single-sided.** `findTheta` always solves the
+   CW branch (positive θ, target Eₓ > 1). The CCW move uses the same
+   θ magnitude with the sign flipped — the motor rotates by the same
+   physical angle in the opposite direction. The actual Eₓ the iris
+   achieves on the CCW side is whatever the mechanism produces at
+   that motor angle (the model has no Eₓ < 1 domain). The "Resulting
+   expansion" print reflects this — verified via `computeEx` for CW,
+   echoed magnitude for CCW.
+3. **No `minEx` field.** Removed. Magnitude is always ≥ 1.0; both
+   sides clamp to `maxEx` from above.
+4. **LCD edit screen**: direction is a separate UI state (member
+   `_xGotoDirCw`). Encoder edits magnitude only, in `[1.0, maxEx]`.
+   - **DOWN button** toggles CW ↔ CCW.
+   - SW button toggles fine/coarse (unchanged).
+   - ACCEPT commits `gotoExpansion(±magnitude)` based on direction.
+   - Display: `"1.350 CW  [SW]"` or `"1.350 CCW [SW]"`. F/C indicator
+     stays on the top row.
+5. **Serial syntax**: `Xgoto <magnitude> [cw|ccw]`. Direction token is
+   case-insensitive; defaults to `cw`. Examples:
+   - `Xgoto 1.35` → CW magnitude 1.35
+   - `Xgoto 1.35 ccw` → CCW by the same θ magnitude
+   - `Xgoto 1.0` (any direction) → return to center
+6. **Step-counter invariant unchanged**: round-trips through center
+   land on byte-identical absolute step positions, because every
+   move computes `targetSteps` from absolute θ.
 
 ---
 
