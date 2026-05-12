@@ -437,13 +437,22 @@ void IrisMenuUI::update() {
         drawEditXgoto();
       }
       const float step = _xGotoFineMode ? xGotoStepFine : xGotoStepCoarse;
-      const float goMin = 1.0f;
       const float goMax = _stretcher.geometry().maxEx;
       if (ed == +1) {
-        _xGotoValue = constrain(roundToStep(_xGotoValue + step, step), goMin, goMax);
+        // Encoder up: magnitude grows in whichever direction is current.
+        _xGotoValue = constrain(roundToStep(_xGotoValue + step, step), 1.0f, goMax);
         drawEditXgoto();
       } else if (ed == -1) {
-        _xGotoValue = constrain(roundToStep(_xGotoValue - step, step), goMin, goMax);
+        // Encoder down: magnitude shrinks toward 1.0. At the floor, one
+        // more click flips direction and jumps back to 1.0+step on the
+        // other side — the LCD never shows a magnitude below 1.0.
+        if (_xGotoValue > 1.0f + step / 2.0f) {
+          _xGotoValue = roundToStep(_xGotoValue - step, step);
+          if (_xGotoValue < 1.0f) _xGotoValue = 1.0f;
+        } else {
+          _xGotoDirCw = !_xGotoDirCw;
+          _xGotoValue = constrain(roundToStep(1.0f + step, step), 1.0f, goMax);
+        }
         drawEditXgoto();
       }
       if (acceptPressed) {
