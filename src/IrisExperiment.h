@@ -7,6 +7,7 @@ namespace kisley {
 namespace iris {
 
 class IrisExperimentRunner;   // fwd
+class IrisMenuUI;             // fwd; declared in IrisMenuUI.h
 
 // One experiment = a name + a sequence of target Ex values. Hold time
 // between waypoints is global to the runner, not per-step.
@@ -64,6 +65,13 @@ public:
   // Mid-run abort request — honoured between motion segments.
   void requestAbort()                      { _abortRequested = true; }
 
+  // Attach the UI so the LCD gets refreshed during motion. Without this
+  // the LCD stays stuck on whatever it last drew before the (blocking)
+  // gotoExpansion call took over the loop — the encoder-step callback
+  // is the only opportunity to repaint mid-motion. The runner calls
+  // ui.refresh() at the same cadence as motion CSV logging.
+  void attachUi(IrisMenuUI& ui)            { _ui = &ui; }
+
   // ---- Loop hook ----
   // Drive the state machine. Call once per main loop() iteration.
   void update();
@@ -116,6 +124,10 @@ private:
   // Streaming
   bool                  _streamStrain   = false;
   uint32_t              _lastStreamMs   = 0;
+
+  // Optional UI hook so the LCD can be repainted from inside the step
+  // callback while motion blocks the main loop.
+  IrisMenuUI*           _ui             = nullptr;
 
   // Stepper-callback bridge (used during motion to emit rows on a timer
   // even though the motor loop owns the thread). Active runner is set

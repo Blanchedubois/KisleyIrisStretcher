@@ -1,4 +1,5 @@
 #include "IrisExperiment.h"
+#include "IrisMenuUI.h"
 #include <string.h>
 
 namespace kisley {
@@ -81,6 +82,10 @@ void IrisExperimentRunner::_stepCallback(long /*stepIdx*/, void* /*user*/) {
   uint32_t now = millis();
   if (now - r->_lastLogMs >= r->_motionLogMs) {
     r->emitRow('M');
+    // Repaint the LCD with the live target/state. gotoExpansion blocks
+    // the main loop so this is the only place mid-motion the LCD can
+    // be refreshed.
+    if (r->_ui) r->_ui->refresh();
     r->_lastLogMs = now;
   }
 }

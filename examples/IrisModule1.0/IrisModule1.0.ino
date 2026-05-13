@@ -94,6 +94,11 @@ void setup() {
   // signal-averaging value at runtime.
   ui.attachStrain(strain);
 
+  // Lets the runner refresh the LCD during motion (gotoExpansion blocks
+  // ui.update(), so the runner's step callback is the only opportunity
+  // to repaint the current target/step on the screen mid-motion).
+  runner.attachUi(ui);
+
   console.setBannerLine("|KisleyLab V2.1 |");
   console.begin();
 }
