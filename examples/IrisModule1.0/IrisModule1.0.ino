@@ -50,6 +50,12 @@ IrisExperimentRunner runner(stretcher, strain);
 const float kExp1Targets[] = { 1.0f, 3.4f, 1.0f };
 const IrisExperiment kExp1 = { "Exp1", kExp1Targets, 3 };
 
+// Exp2: stepped ramp — 1x → 2x → 1x → 3x → 1x → 3.4x.
+// Each pair of waypoints holds for the runner's global hold time
+// (default 2 s) before advancing.
+const float kExp2Targets[] = { 1.0f, 2.0f, 1.0f, 3.0f, 1.0f, 3.4f };
+const IrisExperiment kExp2 = { "Exp2", kExp2Targets, 6 };
+
 void setup() {
   delay(500);
   USB.begin();
@@ -84,6 +90,7 @@ void setup() {
   // Register experiments here. Each call appends to the runner's list
   // and (via attachRunner below) makes it appear in the LCD submenu.
   runner.registerExperiment(kExp1);
+  runner.registerExperiment(kExp2);
 
   // Tell the UI and serial console about the runner so the
   // "Experiments" menu and Xstrain/Xrun/Xabort serial commands work.
