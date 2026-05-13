@@ -106,7 +106,7 @@ void IrisMenuUI::begin() {
   _items[2] = {"Xcalibrate",  BuiltinKind::Xcalibrate,  nullptr, nullptr};
   _items[3] = {"Xspeed",      BuiltinKind::Xspeed,      nullptr, nullptr};
   _items[4] = {"Xgoto",       BuiltinKind::Xgoto,       nullptr, nullptr};
-  _items[5] = {"Xsignalavg",  BuiltinKind::Xsignalavg,  nullptr, nullptr};
+  _items[5] = {"XsignalAverage",  BuiltinKind::Xsignalavg,  nullptr, nullptr};
   _items[6] = {"Xhelp",       BuiltinKind::Xhelp,       nullptr, nullptr};
   _items[7] = {"Xabout",      BuiltinKind::Xabout,      nullptr, nullptr};
   _items[8] = {"Xexperiments", BuiltinKind::Experiments, nullptr, nullptr};
@@ -249,12 +249,15 @@ void IrisMenuUI::drawEditXspeed() {
 void IrisMenuUI::drawEditXsignalavg() {
   _lcd.clear();
   _lcd.setCursor(0, 0);
-  _lcd.print("Xsignalavg:");
-  _lcd.print(_xSignalAvgFineMode ? " F" : " C");
+  // "XsignalAverage" is 14 chars — fills the top row almost entirely,
+  // so the F/C mode indicator moves down to row 1 next to the value.
+  _lcd.print("XsignalAverage");
   _lcd.setCursor(0, 1);
   _lcd.print("N=");
   _lcd.print(_xSignalAvgValue);
-  _lcd.print(F("    [SW]"));
+  _lcd.print(' ');
+  _lcd.print(_xSignalAvgFineMode ? 'F' : 'C');
+  _lcd.print(F("  [SW]"));
 }
 
 void IrisMenuUI::drawExperimentsMenu() {

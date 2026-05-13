@@ -194,7 +194,7 @@ with the encoder while the **DOWN** button toggles CW ↔ CCW, **SW**
 toggles fine (0.001) / coarse (0.05) step size, and **ACCEPT** commits.
 Display reads `"1.350 CW  [SW]"` or `"1.350 CCW [SW]"`.
 
-There's also an **Xsignalavg** menu item that edits the strain array's
+There's also an **XsignalAverage** menu item that edits the strain array's
 signal-averaging value (samples per ADC per CSV row) at runtime —
 encoder ±1 in fine mode (SW toggles), ±10 in coarse, range `[1, 256]`,
 ACCEPT commits. Only available when `ui.attachStrain(strain)` was called
