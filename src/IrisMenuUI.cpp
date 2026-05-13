@@ -2,6 +2,8 @@
 #include "IrisExperiment.h"
 #include "IrisStrainArray.h"
 #include <math.h>
+#include <stdio.h>
+#include <string.h>
 
 namespace kisley {
 namespace iris {
@@ -277,25 +279,41 @@ void IrisMenuUI::drawExperimentsMenu() {
 void IrisMenuUI::drawRunningExperiment() {
   if (!_runner) return;
   const IrisExperiment* exp = _runner->currentExperiment();
-  _lcd.clear();
-  _lcd.setCursor(0, 0);
+
+  // Refresh in place — no lcd.clear() — to avoid the visible flicker
+  // caused by blanking the display ~5 times per second during motion.
+  // Each row is formatted into a 16-char buffer and printed in one shot,
+  // overwriting whatever was there. Padding with spaces ensures any
+  // leftover characters from a longer previous frame get erased.
+
+  char row[17];
+
+  // Row 0: "Exp1 1/3        "
   if (exp) {
-    _lcd.print(exp->name);
-    _lcd.print(' ');
-    _lcd.print(_runner->currentStepIndex() + 1);
-    _lcd.print('/');
-    _lcd.print(exp->nTargets);
+    snprintf(row, sizeof(row), "%s %u/%u",
+             exp->name,
+             (unsigned)(_runner->currentStepIndex() + 1),
+             (unsigned)exp->nTargets);
   } else {
-    _lcd.print("(no exp)");
+    snprintf(row, sizeof(row), "(no exp)");
   }
-  _lcd.setCursor(0, 1);
-  const float t = _runner->currentTargetEx();
+  for (size_t i = strlen(row); i < 16; i++) row[i] = ' ';
+  row[16] = '\0';
+  _lcd.setCursor(0, 0);
+  _lcd.print(row);
+
+  // Row 1: "3.40 CW  M      " / "1.00     H      "
+  const float t   = _runner->currentTargetEx();
   const float mag = fabsf(t);
-  // Format "X.XX <CW|CCW> <M|H>"
-  printFloatFixed(mag, 2);
-  if (mag > 1.0f + 1e-4f) _lcd.print(t >= 0 ? " CW  " : " CCW ");
-  else                    _lcd.print("     ");
-  _lcd.print(_runner->isHolding() ? 'H' : 'M');
+  const char* dir = (mag > 1.0f + 1e-4f)
+                      ? (t >= 0 ? " CW " : " CCW")
+                      : "    ";
+  snprintf(row, sizeof(row), "%.2f%s %c       ",
+           (double)mag, dir, _runner->isHolding() ? 'H' : 'M');
+  for (size_t i = strlen(row); i < 16; i++) row[i] = ' ';
+  row[16] = '\0';
+  _lcd.setCursor(0, 1);
+  _lcd.print(row);
 }
 
 void IrisMenuUI::drawEditXgoto() {
