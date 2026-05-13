@@ -248,7 +248,14 @@ strain.setTareSamples(32);        // baseline samples at boot (default 16)
 strain.setI2cClock(10000);        // bus clock Hz (default 10 kHz — see Design notes)
 strain.setSdaScl(3, 4);           // I²C pins
 strain.setLayout(myLayout, 6);    // override the 9-slot Kisley default
+strain.setSampleRate(NAU7802_RATE_320SPS);   // chip sample rate (default 320 SPS)
 ```
+
+**Sample rate options**: `NAU7802_RATE_10SPS` (lowest noise) through
+`NAU7802_RATE_320SPS` (fastest, library default). Going from 10 to
+320 SPS gives 32× faster per-chip conversion — the practical throughput
+ceiling becomes the I²C clock instead. Dial back if you see excessive
+sample-to-sample jitter.
 
 CSV header / row format:
 

@@ -107,7 +107,7 @@ void IrisMenuUI::begin() {
   _items[5] = {"Xsignalavg",  BuiltinKind::Xsignalavg,  nullptr, nullptr};
   _items[6] = {"Xhelp",       BuiltinKind::Xhelp,       nullptr, nullptr};
   _items[7] = {"Xabout",      BuiltinKind::Xabout,      nullptr, nullptr};
-  _items[8] = {"Experiments", BuiltinKind::Experiments, nullptr, nullptr};
+  _items[8] = {"Xexperiments", BuiltinKind::Experiments, nullptr, nullptr};
   _itemCount = 9;
 
   drawMenu();

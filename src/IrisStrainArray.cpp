@@ -48,6 +48,7 @@ void IrisStrainArray::setSignalAveraging(uint16_t n) {
 }
 void IrisStrainArray::setTareSamples(uint16_t n)          { _tareSamples = n ? n : 1; }
 void IrisStrainArray::setSampleTimeoutMs(uint16_t ms)     { _sampleTimeoutMs = ms; }
+void IrisStrainArray::setSampleRate(NAU7802_SampleRate r) { _rate = r; }
 
 void IrisStrainArray::_computeUniqueMuxes() {
   _nMuxes = 0;
@@ -125,7 +126,7 @@ bool IrisStrainArray::_initOneChip(uint8_t i) {
 
   _nau.setLDO(NAU7802_3V0);
   _nau.setGain(NAU7802_GAIN_128);
-  _nau.setRate(NAU7802_RATE_10SPS);
+  _nau.setRate(_rate);
 
   // Internal cal — zeroes the ADC's intrinsic input offset.
   // Adafruit's calibrate() doesn't actually wait for completion (loop

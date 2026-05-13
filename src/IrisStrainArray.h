@@ -56,6 +56,10 @@ public:
   void setSignalAveraging(uint16_t n);
   void setTareSamples(uint16_t n);
   void setSampleTimeoutMs(uint16_t ms);
+  // NAU7802 conversion rate per chip: 10/20/40/80/320 SPS. Higher = faster
+  // streaming, noisier per-sample. Default 320 SPS for max throughput;
+  // dial down if you see excessive sample noise. Call before begin().
+  void setSampleRate(NAU7802_SampleRate r);
 
   // ---- Lifecycle ----
   // Scans for the unique mux addresses declared in the layout, initialises
@@ -108,6 +112,7 @@ private:
   uint16_t _signalAvg        = 4;
   uint16_t _tareSamples      = 16;
   uint16_t _sampleTimeoutMs  = 200;
+  NAU7802_SampleRate _rate   = NAU7802_RATE_320SPS;   // 32× faster than 10 SPS
 
   Adafruit_NAU7802 _nau;
   bool     _present[MAX_ADCS];
