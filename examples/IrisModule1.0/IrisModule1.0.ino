@@ -79,10 +79,17 @@ void setup() {
   ui.setUseInternalPulldown(true);
   ui.begin();                        // brings up Wire (SDA=3, SCL=4) + LCD
 
-  // Permanent firmware setting for the Kisley rig: 2-sample averaging per
-  // strain row during experiments. Strong enough to give a meaningful
-  // stdev as the error column, light enough to keep row rate brisk.
-  strain.setSignalAveraging(2);
+  // Speed/noise balance tuned for the Kisley rig:
+  //   - I2C bus at 50 kHz (5× the safe-default 10 kHz; still well below the
+  //     bus's 100 kHz failure point on this wiring)
+  //   - 8 raw samples averaged per ADC per CSV row — meaningful Bessel
+  //     stdev as the error column, and noise scales as 1/sqrt(N)
+  //   - Library-side mux-routing optimisation skips the redundant deselect
+  //     on the target mux; net per-row time is comparable to the previous
+  //     2-sample @ 10 kHz config despite 4× more averaging.
+  // Dial setI2cClock(10000) to fall back to safe default if you see I2C errors.
+  strain.setI2cClock(50000);
+  strain.setSignalAveraging(8);
   ui.showLcdMessage("Initialising the", "ADCs...");
   strain.begin();                    // discovers 9 NAU7802s, runs host-side tare
   ui.refresh();                      // restore the main menu on the LCD

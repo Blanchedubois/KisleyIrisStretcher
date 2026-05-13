@@ -81,12 +81,19 @@ void IrisStrainArray::_muxDeselectAll() {
 }
 
 void IrisStrainArray::_muxRoute(uint8_t muxAddr, uint8_t ch) {
-  _muxDeselectAll();
-  delay(2);
+  // Deselect every OTHER mux — skip the target mux because the write
+  // that follows overrides its state anyway. One fewer I2C transaction
+  // per chip access, ~5 ms saved per sample at 10 kHz bus speed.
+  for (uint8_t m = 0; m < _nMuxes; m++) {
+    if (_muxAddrs[m] == muxAddr) continue;
+    _wire->beginTransmission(_muxAddrs[m]);
+    _wire->write((uint8_t)0x00);
+    _wire->endTransmission();
+  }
   _wire->beginTransmission(muxAddr);
   _wire->write((uint8_t)(1u << ch));
   _wire->endTransmission();
-  delay(5);
+  delay(1);   // brief settle for mux FETs + chip
 }
 
 bool IrisStrainArray::_waitSample(uint16_t timeoutMs) {
