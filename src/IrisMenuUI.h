@@ -10,6 +10,8 @@
 namespace kisley {
 namespace iris {
 
+class IrisExperimentRunner;   // fwd; declared in IrisExperiment.h
+
 // "About" screen metadata. Defaults come from library build; override with
 // setAboutInfo() in your sketch to display the sketch's build info instead.
 struct IrisAboutInfo {
@@ -55,6 +57,13 @@ public:
                         ActionCallback cb,
                         void* user = nullptr);
 
+  // Attach an IrisExperimentRunner so the LCD gets a top-level
+  // "Experiments" entry that pushes into a submenu listing every
+  // experiment registered on the runner. The runner is polled during
+  // run for status (current step, target, motor state) so the LCD can
+  // render progress. The MENU button mid-run requests an abort.
+  void attachRunner(IrisExperimentRunner& runner);
+
   // Public for advanced sketches that want direct LCD access.
   hd44780_I2Cexp& lcd() { return _lcd; }
 
@@ -74,11 +83,14 @@ private:
     HELP_SCROLL,
     ABOUT_SCROLL,
     EDIT_XSPEED,
-    EDIT_XGOTO
+    EDIT_XGOTO,
+    EXPERIMENTS_MENU,
+    RUNNING_EXPERIMENT,
   };
 
   enum class BuiltinKind : uint8_t {
-    XsetZero, Xzero, Xcalibrate, Xspeed, Xgoto, Xhelp, Xabout, Custom
+    XsetZero, Xzero, Xcalibrate, Xspeed, Xgoto, Xhelp, Xabout,
+    Experiments, Custom
   };
 
   struct MenuEntry {
@@ -96,6 +108,8 @@ private:
   void drawStatus(const char* msg);
   void drawEditXspeed();
   void drawEditXgoto();
+  void drawExperimentsMenu();
+  void drawRunningExperiment();
   void printFloatFixed(float v, uint8_t places);
   void runCurrentItem();
   void enterHelp();
@@ -141,6 +155,11 @@ private:
   IrisAboutInfo  _about;
   uint8_t        _scrollFrame = 0;
   unsigned long  _scrollNextMs = 0;
+
+  // ---- Experiments submenu ----
+  IrisExperimentRunner* _runner    = nullptr;
+  uint8_t               _expIndex  = 0;   // index into runner's registered experiments
+  uint32_t              _lastRunStatusMs = 0;
 };
 
 } // namespace iris

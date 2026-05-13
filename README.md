@@ -63,7 +63,9 @@ responses.
 | `IrisStretcher` | High-level motion + kinematics facade | `gotoExpansion`, `goToZero`, `setZeroHere`, `calibrate`, `setBladeSpeed`, `currentSteps`, `currentTheta` |
 | `IrisMenuUI` | LCD + encoder + buttons state machine | `begin`, `update`, `registerMenuItem`, `setInvertEncoder`, `setUseInternalPulldown`, `setAboutInfo` |
 | `IrisSerialConsole` | `X<command>` line parser | `begin`, `update`, `registerCommand`, `printBanner`, `printHelp` |
-| `IrisStrainNAU7802` | Optional 24-bit strain gauge ADC | `begin`, `readVolts` |
+| `IrisStrainNAU7802` | Optional 24-bit single-chip strain gauge ADC | `begin`, `readVolts` |
+| `IrisStrainArray` | Multi-mux strain-gauge array (9 NAU7802s on the Kisley rig) | `begin`, `acquireRow`, `tare`, `printCsvRow` |
+| `IrisExperiment` / `IrisExperimentRunner` | Define ordered expansion sequences and stream synchronised CSV data | `registerExperiment`, `requestRun`, `update` |
 | `IrisKinematics` | Pure-math forward/inverse maps (static) | `computeEx`, `findTheta` |
 
 ### Serial commands
@@ -75,7 +77,49 @@ responses.
 | `XsetZero` | Reset the position counter to 0 at the current pose |
 | `Xcalibrate` | Run the calibration routine |
 | `Xspeed <cm/s>` | Set blade speed (recomputes step delay) |
+| `Xstrain` | Toggle continuous 9-ADC CSV streaming on/off |
+| `Xrun <name>` | Run a registered experiment by name (`Xrun list` to enumerate) |
+| `Xabort` | Abort the currently running experiment (between motion segments) |
 | `Xhelp` | Print this list |
+
+### Defining and running experiments
+
+```cpp
+#include <KisleyIrisStretcher.h>
+using namespace kisley::iris;
+
+IrisStretcher        stretcher(12, 13);
+IrisStrainArray      strain;
+IrisMenuUI           ui(stretcher, /* pins */);
+IrisSerialConsole    console(stretcher);
+IrisExperimentRunner runner(stretcher, strain);
+
+// 1. Define waypoints (signed Ex; positive=CW, negative=CCW, |Ex|≤1=center).
+const float kExp1Targets[] = { 1.0f, 3.4f, 1.0f };
+const IrisExperiment kExp1 = { "Exp1", kExp1Targets, 3 };
+
+void setup() {
+  /* ... usual init ... */
+  strain.begin();
+  runner.registerExperiment(kExp1);
+  ui.attachRunner(runner);
+  console.attachRunner(runner);
+}
+
+void loop() {
+  ui.update();
+  console.update();
+  runner.update();   // <- drives the experiment state machine
+}
+```
+
+The LCD's main menu gains an "Experiments" entry; selecting it pushes
+into a submenu listing every registered experiment. ACCEPT runs;
+MENU aborts. CSV output per row:
+`exp,t_ms,steps,target_ex,state,ADC1_mean,ADC1_std,…,ADC9_mean,ADC9_std`.
+
+See `examples/ExperimentDemo/` for stepped, bidirectional, and
+`customRun`-based examples.
 
 **On the LCD**, the Xgoto edit screen shows magnitude + direction:
 `"1.350 CW  [SW]"` or `"1.350 CCW [SW]"`. The encoder edits magnitude

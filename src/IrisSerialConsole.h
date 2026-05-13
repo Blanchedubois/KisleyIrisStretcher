@@ -5,6 +5,8 @@
 namespace kisley {
 namespace iris {
 
+class IrisExperimentRunner;   // fwd
+
 // Reads "X<command> [args]" lines from a Stream and dispatches them.
 // Built-in commands:  Xgoto <Ex>, Xzero, XsetZero, Xcalibrate,
 //                     Xspeed <cm/s>, Xhelp.
@@ -29,6 +31,11 @@ public:
                        const char* helpLine,
                        CommandCallback cb,
                        void* user = nullptr);
+
+  // Attach an experiment runner so the console exposes Xstrain (toggle
+  // strain streaming), Xrun <name> (start a registered experiment),
+  // Xrun list (dump registered names), and Xabort (interrupt a run).
+  void attachRunner(IrisExperimentRunner& runner);
 
   void printBanner();
   void printHelp();
@@ -61,6 +68,8 @@ private:
   uint8_t   _customCount = 0;
 
   const char* _bannerLine = "|KisleyLab V1.0 |";
+
+  IrisExperimentRunner* _runner = nullptr;
 };
 
 } // namespace iris

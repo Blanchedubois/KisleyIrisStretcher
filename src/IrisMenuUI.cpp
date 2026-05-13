@@ -1,4 +1,5 @@
 #include "IrisMenuUI.h"
+#include "IrisExperiment.h"
 #include <math.h>
 
 namespace kisley {
@@ -97,14 +98,15 @@ void IrisMenuUI::begin() {
   }
 
   // Seed built-in menu items in the original order.
-  _items[0] = {"XsetZero",   BuiltinKind::XsetZero,   nullptr, nullptr};
-  _items[1] = {"Xzero",      BuiltinKind::Xzero,      nullptr, nullptr};
-  _items[2] = {"Xcalibrate", BuiltinKind::Xcalibrate, nullptr, nullptr};
-  _items[3] = {"Xspeed",     BuiltinKind::Xspeed,     nullptr, nullptr};
-  _items[4] = {"Xgoto",      BuiltinKind::Xgoto,      nullptr, nullptr};
-  _items[5] = {"Xhelp",      BuiltinKind::Xhelp,      nullptr, nullptr};
-  _items[6] = {"Xabout",     BuiltinKind::Xabout,     nullptr, nullptr};
-  _itemCount = 7;
+  _items[0] = {"XsetZero",    BuiltinKind::XsetZero,    nullptr, nullptr};
+  _items[1] = {"Xzero",       BuiltinKind::Xzero,       nullptr, nullptr};
+  _items[2] = {"Xcalibrate",  BuiltinKind::Xcalibrate,  nullptr, nullptr};
+  _items[3] = {"Xspeed",      BuiltinKind::Xspeed,      nullptr, nullptr};
+  _items[4] = {"Xgoto",       BuiltinKind::Xgoto,       nullptr, nullptr};
+  _items[5] = {"Xhelp",       BuiltinKind::Xhelp,       nullptr, nullptr};
+  _items[6] = {"Xabout",      BuiltinKind::Xabout,      nullptr, nullptr};
+  _items[7] = {"Experiments", BuiltinKind::Experiments, nullptr, nullptr};
+  _itemCount = 8;
 
   drawMenu();
 }
@@ -162,6 +164,10 @@ bool IrisMenuUI::registerMenuItem(const char* label,
   return true;
 }
 
+void IrisMenuUI::attachRunner(IrisExperimentRunner& runner) {
+  _runner = &runner;
+}
+
 // ---- Drawing ----
 
 void IrisMenuUI::drawMenu() {
@@ -205,6 +211,49 @@ void IrisMenuUI::drawEditXspeed() {
   _lcd.setCursor(0, 1);
   printFloatFixed(_xSpeedValue, _xSpeedFineMode ? 2 : 1);
   _lcd.print(" [SW]");
+}
+
+void IrisMenuUI::drawExperimentsMenu() {
+  _lcd.clear();
+  if (!_runner || _runner->experimentCount() == 0) {
+    _lcd.setCursor(0, 0); _lcd.print("Experiments:");
+    _lcd.setCursor(0, 1); _lcd.print("(none yet)");
+    return;
+  }
+  const uint8_t n = _runner->experimentCount();
+  if (_expIndex >= n) _expIndex = 0;
+  const IrisExperiment* cur  = _runner->experiment(_expIndex);
+  const IrisExperiment* next = _runner->experiment((_expIndex + 1) % n);
+  _lcd.setCursor(0, 0);
+  _lcd.write(byte(0x7E));
+  if (cur) _lcd.print(cur->name);
+  _lcd.setCursor(0, 1);
+  _lcd.print(' ');
+  if (next) _lcd.print(next->name);
+}
+
+void IrisMenuUI::drawRunningExperiment() {
+  if (!_runner) return;
+  const IrisExperiment* exp = _runner->currentExperiment();
+  _lcd.clear();
+  _lcd.setCursor(0, 0);
+  if (exp) {
+    _lcd.print(exp->name);
+    _lcd.print(' ');
+    _lcd.print(_runner->currentStepIndex() + 1);
+    _lcd.print('/');
+    _lcd.print(exp->nTargets);
+  } else {
+    _lcd.print("(no exp)");
+  }
+  _lcd.setCursor(0, 1);
+  const float t = _runner->currentTargetEx();
+  const float mag = fabsf(t);
+  // Format "X.XX <CW|CCW> <M|H>"
+  printFloatFixed(mag, 2);
+  if (mag > 1.0f + 1e-4f) _lcd.print(t >= 0 ? " CW  " : " CCW ");
+  else                    _lcd.print("     ");
+  _lcd.print(_runner->isHolding() ? 'H' : 'M');
 }
 
 void IrisMenuUI::drawEditXgoto() {
@@ -330,6 +379,17 @@ void IrisMenuUI::runCurrentItem() {
       break;
     case BuiltinKind::Xabout:
       enterAbout();
+      break;
+    case BuiltinKind::Experiments:
+      if (!_runner || _runner->experimentCount() == 0) {
+        drawStatus("No experiments");
+        _statusUntilMs = millis() + 1200;
+        _ui = UiState::RUNNING;
+      } else {
+        _expIndex = 0;
+        _ui = UiState::EXPERIMENTS_MENU;
+        drawExperimentsMenu();
+      }
       break;
     case BuiltinKind::Custom:
       if (e.callback) {
@@ -477,8 +537,56 @@ void IrisMenuUI::update() {
         drawMenu();
       }
     } break;
-  }
 
+    case UiState::EXPERIMENTS_MENU: {
+      if (!_runner || _runner->experimentCount() == 0) {
+        _ui = UiState::MENU;
+        drawMenu();
+        break;
+      }
+      const uint8_t n = _runner->experimentCount();
+      if (ed == +1) {
+        _expIndex = (_expIndex + 1) % n;
+        drawExperimentsMenu();
+      } else if (ed == -1) {
+        _expIndex = (_expIndex + n - 1) % n;
+        drawExperimentsMenu();
+      }
+      if (downPressed) {
+        _expIndex = (_expIndex + 1) % n;
+        drawExperimentsMenu();
+      }
+      if (acceptPressed) {
+        const IrisExperiment* exp = _runner->experiment(_expIndex);
+        if (exp) {
+          _runner->requestRun(*exp);
+          _ui = UiState::RUNNING_EXPERIMENT;
+          _lastRunStatusMs = 0;
+          drawRunningExperiment();
+        }
+      }
+      if (menuPressed) {
+        _ui = UiState::MENU;
+        drawMenu();
+      }
+    } break;
+
+    case UiState::RUNNING_EXPERIMENT: {
+      // Refresh the LCD a few times per second to reflect runner state.
+      const uint32_t now = millis();
+      if (now - _lastRunStatusMs >= 250) {
+        drawRunningExperiment();
+        _lastRunStatusMs = now;
+      }
+      // MENU = abort. The runner will honour it between motion segments.
+      if (menuPressed && _runner) _runner->requestAbort();
+      // When the runner returns to idle, pop back to the experiments submenu.
+      if (_runner && !_runner->isRunning()) {
+        _ui = UiState::EXPERIMENTS_MENU;
+        drawExperimentsMenu();
+      }
+    } break;
+  }
 }
 
 } // namespace iris

@@ -1,4 +1,5 @@
 #include "IrisSerialConsole.h"
+#include "IrisExperiment.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -46,6 +47,9 @@ void IrisSerialConsole::printHelp() {
   _io.println(" XsetZero             \xe2\x80\x93 reset position counter to 0");
   _io.println(" Xcalibrate           \xe2\x80\x93 run calibration routine");
   _io.println(" Xspeed <value> cm/s  \xe2\x80\x93 changes expansion speed (cm/s approx)");
+  _io.println(" Xstrain              \xe2\x80\x93 toggle 9-ADC strain CSV streaming");
+  _io.println(" Xrun <name>          \xe2\x80\x93 run a registered experiment (Xrun list)");
+  _io.println(" Xabort               \xe2\x80\x93 abort a running experiment");
   _io.println(" Xhelp                \xe2\x80\x93 this message");
   for (uint8_t i = 0; i < _customCount; i++) {
     if (_custom[i].help) {
@@ -55,6 +59,10 @@ void IrisSerialConsole::printHelp() {
       _io.println(_custom[i].help);
     }
   }
+}
+
+void IrisSerialConsole::attachRunner(IrisExperimentRunner& runner) {
+  _runner = &runner;
 }
 
 bool IrisSerialConsole::registerCommand(const char* name,
@@ -146,6 +154,50 @@ bool IrisSerialConsole::dispatchBuiltin(const char* cmd, char* /*tokState*/) {
   }
   if (strcmp(cmd, "calibrate") == 0) {
     _stretcher.calibrate();
+    return true;
+  }
+  if (strcmp(cmd, "strain") == 0) {
+    if (!_runner) {
+      _io.println(F("Error: no IrisExperimentRunner attached"));
+      return true;
+    }
+    const bool wasOn = _runner->isStreamingStrain();
+    _runner->setStreamStrain(!wasOn);
+    _io.print(F("# Strain streaming: "));
+    _io.println(_runner->isStreamingStrain() ? F("ON") : F("OFF"));
+    return true;
+  }
+  if (strcmp(cmd, "run") == 0) {
+    if (!_runner) {
+      _io.println(F("Error: no IrisExperimentRunner attached"));
+      return true;
+    }
+    char* arg = strtok(nullptr, " ");
+    if (!arg) {
+      _io.println(F("Usage: Xrun <name> | Xrun list"));
+      return true;
+    }
+    if (ieq(arg, "list")) {
+      _io.print(F("# Registered experiments ("));
+      _io.print(_runner->experimentCount()); _io.println(F("):"));
+      for (uint8_t i = 0; i < _runner->experimentCount(); i++) {
+        const IrisExperiment* e = _runner->experiment(i);
+        if (e) { _io.print(F("#   ")); _io.println(e->name); }
+      }
+      return true;
+    }
+    if (!_runner->requestRunByName(arg)) {
+      _io.print(F("Error: no experiment named ")); _io.println(arg);
+    }
+    return true;
+  }
+  if (strcmp(cmd, "abort") == 0) {
+    if (!_runner) {
+      _io.println(F("Error: no IrisExperimentRunner attached"));
+      return true;
+    }
+    _runner->requestAbort();
+    _io.println(F("# Abort requested"));
     return true;
   }
   if (strcmp(cmd, "speed") == 0) {

@@ -17,5 +17,7 @@
 #include "IrisStretcher.h"
 #include "IrisMenuUI.h"
 #include "IrisSerialConsole.h"
+#include "IrisStrainArray.h"
+#include "IrisExperiment.h"
 
-#define KISLEY_IRIS_STRETCHER_VERSION "1.0.0"
+#define KISLEY_IRIS_STRETCHER_VERSION "2.0.0"

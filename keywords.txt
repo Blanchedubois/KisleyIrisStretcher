@@ -13,6 +13,9 @@ IrisGeometry	KEYWORD1
 IrisStepperDriver	KEYWORD1
 IrisKinematics	KEYWORD1
 IrisStrainNAU7802	KEYWORD1
+IrisStrainArray	KEYWORD1
+IrisExperiment	KEYWORD1
+IrisExperimentRunner	KEYWORD1
 
 #######################################
 # Methods (KEYWORD2)
@@ -39,3 +42,33 @@ registerMenuItem	KEYWORD2
 registerCommand	KEYWORD2
 readVolts	KEYWORD2
 printBanner	KEYWORD2
+acquireRow	KEYWORD2
+tare	KEYWORD2
+rescan	KEYWORD2
+printCsvHeader	KEYWORD2
+printCsvRow	KEYWORD2
+printCsvHeaderTrailing	KEYWORD2
+printCsvRowTrailing	KEYWORD2
+printStatus	KEYWORD2
+adcCount	KEYWORD2
+registerExperiment	KEYWORD2
+attachRunner	KEYWORD2
+requestRun	KEYWORD2
+requestRunByName	KEYWORD2
+requestAbort	KEYWORD2
+isRunning	KEYWORD2
+isHolding	KEYWORD2
+currentExperiment	KEYWORD2
+currentStepIndex	KEYWORD2
+currentTargetEx	KEYWORD2
+setStreamStrain	KEYWORD2
+isStreamingStrain	KEYWORD2
+emitRow	KEYWORD2
+setMotionLogPeriodMs	KEYWORD2
+setHoldLogPeriodMs	KEYWORD2
+setHoldMs	KEYWORD2
+setLayout	KEYWORD2
+setI2cClock	KEYWORD2
+setSignalAveraging	KEYWORD2
+setTareSamples	KEYWORD2
+setSampleTimeoutMs	KEYWORD2

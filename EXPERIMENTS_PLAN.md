@@ -291,7 +291,8 @@ spaced by `holdLogPeriodMs`. Default 100 ms = 10 Hz.
 | `src/IrisSerialConsole.h` / `.cpp` | add `Xstrain`, `Xrun <name>`, `Xabort` built-ins; add a list of known experiments for `Xrun list` |
 | `src/KisleyIrisStretcher.h` | include the two new headers |
 | `library.properties` | bump version to 2.0.0; depends gets `Adafruit BusIO, Adafruit Unified Sensor` if not already pulled in |
-| `examples/ExperimentDemo/ExperimentDemo.ino` | **NEW** — defines `Exp1` (1x→3.4x→1x) and `Exp2` (1x→2.0x→1x→2.0 CCW→1x), registers both, runs `setup()` and `loop()` exactly like `IrisModule1.0.ino` does |
+| `examples/IrisModule1.0/IrisModule1.0.ino` | **UPDATE** — defines and registers `Exp1` (1x→3.4x→1x) so the canonical Kisley rig firmware ships with the example experiment selectable from the LCD. Otherwise unchanged. |
+| `examples/ExperimentDemo/ExperimentDemo.ino` | **NEW** — defines `Exp1` (1x→3.4x→1x) and `Exp2` (1x→2.0x→1x→-2.0x→1x), registers both, demonstrates the pattern for labs adding their own |
 | `extras/StrainArray9/StrainArray9.ino` | unchanged — kept as a standalone reference sketch that doesn't depend on the rest of the library |
 | `EXPERIMENTS_PLAN.md` | this file |
 | `README.md` | add an Experiments section with the 4-line "how to add one" recipe |
