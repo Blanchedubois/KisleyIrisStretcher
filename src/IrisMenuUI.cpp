@@ -1,5 +1,6 @@
 #include "IrisMenuUI.h"
 #include "IrisExperiment.h"
+#include "IrisStrainArray.h"
 #include <math.h>
 
 namespace kisley {
@@ -97,16 +98,17 @@ void IrisMenuUI::begin() {
     }
   }
 
-  // Seed built-in menu items in the original order.
+  // Seed built-in menu items.
   _items[0] = {"XsetZero",    BuiltinKind::XsetZero,    nullptr, nullptr};
   _items[1] = {"Xzero",       BuiltinKind::Xzero,       nullptr, nullptr};
   _items[2] = {"Xcalibrate",  BuiltinKind::Xcalibrate,  nullptr, nullptr};
   _items[3] = {"Xspeed",      BuiltinKind::Xspeed,      nullptr, nullptr};
   _items[4] = {"Xgoto",       BuiltinKind::Xgoto,       nullptr, nullptr};
-  _items[5] = {"Xhelp",       BuiltinKind::Xhelp,       nullptr, nullptr};
-  _items[6] = {"Xabout",      BuiltinKind::Xabout,      nullptr, nullptr};
-  _items[7] = {"Experiments", BuiltinKind::Experiments, nullptr, nullptr};
-  _itemCount = 8;
+  _items[5] = {"Xsignalavg",  BuiltinKind::Xsignalavg,  nullptr, nullptr};
+  _items[6] = {"Xhelp",       BuiltinKind::Xhelp,       nullptr, nullptr};
+  _items[7] = {"Xabout",      BuiltinKind::Xabout,      nullptr, nullptr};
+  _items[8] = {"Experiments", BuiltinKind::Experiments, nullptr, nullptr};
+  _itemCount = 9;
 
   drawMenu();
 }
@@ -168,6 +170,11 @@ void IrisMenuUI::attachRunner(IrisExperimentRunner& runner) {
   _runner = &runner;
 }
 
+void IrisMenuUI::attachStrain(IrisStrainArray& strain) {
+  _strain = &strain;
+  _xSignalAvgValue = strain.signalAveraging();
+}
+
 // ---- Drawing ----
 
 void IrisMenuUI::drawMenu() {
@@ -211,6 +218,17 @@ void IrisMenuUI::drawEditXspeed() {
   _lcd.setCursor(0, 1);
   printFloatFixed(_xSpeedValue, _xSpeedFineMode ? 2 : 1);
   _lcd.print(" [SW]");
+}
+
+void IrisMenuUI::drawEditXsignalavg() {
+  _lcd.clear();
+  _lcd.setCursor(0, 0);
+  _lcd.print("Xsignalavg:");
+  _lcd.print(_xSignalAvgFineMode ? " F" : " C");
+  _lcd.setCursor(0, 1);
+  _lcd.print("N=");
+  _lcd.print(_xSignalAvgValue);
+  _lcd.print(F("    [SW]"));
 }
 
 void IrisMenuUI::drawExperimentsMenu() {
@@ -374,6 +392,18 @@ void IrisMenuUI::runCurrentItem() {
       _ui = UiState::EDIT_XGOTO;
       drawEditXgoto();
       break;
+    case BuiltinKind::Xsignalavg:
+      if (!_strain) {
+        drawStatus("No strain");
+        _statusUntilMs = millis() + 1200;
+        _ui = UiState::RUNNING;
+      } else {
+        // Reflect the current value when entering the screen.
+        _xSignalAvgValue = _strain->signalAveraging();
+        _ui = UiState::EDIT_XSIGNALAVG;
+        drawEditXsignalavg();
+      }
+      break;
     case BuiltinKind::Xhelp:
       enterHelp();
       break;
@@ -529,6 +559,34 @@ void IrisMenuUI::update() {
         const double signedEx = _xGotoDirCw ? double(_xGotoValue)
                                             : -double(_xGotoValue);
         _stretcher.gotoExpansion(signedEx);
+        _statusUntilMs = millis() + 800;
+        _ui = UiState::RUNNING;
+      }
+      if (menuPressed) {
+        _ui = UiState::MENU;
+        drawMenu();
+      }
+    } break;
+
+    case UiState::EDIT_XSIGNALAVG: {
+      if (encSWPressed) {
+        _xSignalAvgFineMode = !_xSignalAvgFineMode;
+        drawEditXsignalavg();
+      }
+      const int step = _xSignalAvgFineMode ? 1 : 10;
+      int next = (int)_xSignalAvgValue;
+      if (ed == +1)      next += step;
+      else if (ed == -1) next -= step;
+      if (next < 1)   next = 1;
+      if (next > 256) next = 256;   // IrisStrainArray::MAX_AVG
+      if ((uint16_t)next != _xSignalAvgValue) {
+        _xSignalAvgValue = (uint16_t)next;
+        drawEditXsignalavg();
+      }
+      if (acceptPressed) {
+        if (_strain) _strain->setSignalAveraging(_xSignalAvgValue);
+        drawStatus("N=");
+        _lcd.print(_xSignalAvgValue);
         _statusUntilMs = millis() + 800;
         _ui = UiState::RUNNING;
       }

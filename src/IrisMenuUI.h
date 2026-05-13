@@ -11,6 +11,7 @@ namespace kisley {
 namespace iris {
 
 class IrisExperimentRunner;   // fwd; declared in IrisExperiment.h
+class IrisStrainArray;        // fwd; declared in IrisStrainArray.h
 
 // "About" screen metadata. Defaults come from library build; override with
 // setAboutInfo() in your sketch to display the sketch's build info instead.
@@ -64,6 +65,12 @@ public:
   // render progress. The MENU button mid-run requests an abort.
   void attachRunner(IrisExperimentRunner& runner);
 
+  // Attach an IrisStrainArray so the LCD's "Xsignalavg" edit screen
+  // can read and write the current signal-averaging value on the
+  // strain array. Without this attachment, selecting Xsignalavg
+  // briefly displays "No strain attached" instead.
+  void attachStrain(IrisStrainArray& strain);
+
   // Public for advanced sketches that want direct LCD access.
   hd44780_I2Cexp& lcd() { return _lcd; }
 
@@ -84,12 +91,13 @@ private:
     ABOUT_SCROLL,
     EDIT_XSPEED,
     EDIT_XGOTO,
+    EDIT_XSIGNALAVG,
     EXPERIMENTS_MENU,
     RUNNING_EXPERIMENT,
   };
 
   enum class BuiltinKind : uint8_t {
-    XsetZero, Xzero, Xcalibrate, Xspeed, Xgoto, Xhelp, Xabout,
+    XsetZero, Xzero, Xcalibrate, Xspeed, Xgoto, Xsignalavg, Xhelp, Xabout,
     Experiments, Custom
   };
 
@@ -110,6 +118,7 @@ private:
   void drawEditXgoto();
   void drawExperimentsMenu();
   void drawRunningExperiment();
+  void drawEditXsignalavg();
   void printFloatFixed(float v, uint8_t places);
   void runCurrentItem();
   void enterHelp();
@@ -160,6 +169,11 @@ private:
   IrisExperimentRunner* _runner    = nullptr;
   uint8_t               _expIndex  = 0;   // index into runner's registered experiments
   uint32_t              _lastRunStatusMs = 0;
+
+  // ---- Xsignalavg edit ----
+  IrisStrainArray*  _strain               = nullptr;
+  uint16_t          _xSignalAvgValue      = 4;
+  bool              _xSignalAvgFineMode   = true;   // fine = ±1, coarse = ±10
 };
 
 } // namespace iris

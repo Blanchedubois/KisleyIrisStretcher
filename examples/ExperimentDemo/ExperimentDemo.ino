@@ -84,6 +84,7 @@ void setup() {
 
   ui.attachRunner(runner);
   console.attachRunner(runner);
+  ui.attachStrain(strain);   // enables the LCD Xsignalavg edit screen
 
   console.setBannerLine("|KisleyLab V2.1 |");
   console.begin();

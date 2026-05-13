@@ -88,6 +88,10 @@ void setup() {
   ui.attachRunner(runner);
   console.attachRunner(runner);
 
+  // Lets the Xsignalavg edit screen read + write the strain array's
+  // signal-averaging value at runtime.
+  ui.attachStrain(strain);
+
   console.setBannerLine("|KisleyLab V2.1 |");
   console.begin();
 }
