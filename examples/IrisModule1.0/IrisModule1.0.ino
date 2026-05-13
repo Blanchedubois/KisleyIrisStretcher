@@ -82,14 +82,14 @@ void setup() {
   // Speed/noise balance tuned for the Kisley rig:
   //   - I2C bus at 50 kHz (5× the safe-default 10 kHz; still well below the
   //     bus's 100 kHz failure point on this wiring)
-  //   - 8 raw samples averaged per ADC per CSV row — meaningful Bessel
-  //     stdev as the error column, and noise scales as 1/sqrt(N)
-  //   - Library-side mux-routing optimisation skips the redundant deselect
-  //     on the target mux; net per-row time is comparable to the previous
-  //     2-sample @ 10 kHz config despite 4× more averaging.
+  //   - 2 raw samples averaged per ADC per CSV row — keeps acquireRow under
+  //     ~90 ms so it doesn't visibly stall the motor between log rows
+  //     during gotoExpansion. Per-row Bessel stdev is ~2× larger than at
+  //     N=8 but motion is smooth. Bump back to 8 for static drift/noise
+  //     captures where motion smoothness doesn't matter.
   // Dial setI2cClock(10000) to fall back to safe default if you see I2C errors.
   strain.setI2cClock(50000);
-  strain.setSignalAveraging(8);
+  strain.setSignalAveraging(2);
   ui.showLcdMessage("Initialising the", "ADCs...");
   strain.begin();                    // discovers 9 NAU7802s, runs host-side tare
   ui.refresh();                      // restore the main menu on the LCD
@@ -112,6 +112,15 @@ void setup() {
   // ui.update(), so the runner's step callback is the only opportunity
   // to repaint the current target/step on the screen mid-motion).
   runner.attachUi(ui);
+
+  // One row per motor step: setting the motion-log period to 0 makes
+  // _stepCallback's `(now - _lastLogMs) >= _motionLogMs` check fire
+  // unconditionally, so emitRow runs after every single step pulse.
+  // Each step now becomes: 4 ms pulse + ~90 ms signal-averaged
+  // acquireRow ≈ 10 steps/sec. Slow, but every step is captured with
+  // its own averaged ADC sample. Set back to 200 (or omit) for the
+  // 250 steps/sec mode with periodic sampling.
+  runner.setMotionLogPeriodMs(0);
 
   console.setBannerLine("|KisleyLab V2.1 |");
   console.begin();
