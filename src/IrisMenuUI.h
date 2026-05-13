@@ -74,6 +74,18 @@ public:
   // Public for advanced sketches that want direct LCD access.
   hd44780_I2Cexp& lcd() { return _lcd; }
 
+  // Write a two-line message to the LCD without changing UI state.
+  // Useful for "Initialising the ADCs..." style status during setup().
+  // line1 may be nullptr.
+  void showLcdMessage(const char* line0, const char* line1 = nullptr);
+
+  // Re-render whatever UI state is currently active. Call this after
+  // showLcdMessage() to bring the menu back, e.g.:
+  //   ui.showLcdMessage("Initialising", "ADCs...");
+  //   strain.begin();
+  //   ui.refresh();
+  void refresh();
+
   // Editable parameter ranges and step sizes — labs can tune these.
   float xSpeedMin       = 0.1f;
   float xSpeedMax       = 5.0f;

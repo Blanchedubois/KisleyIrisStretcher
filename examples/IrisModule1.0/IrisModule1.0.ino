@@ -77,7 +77,9 @@ void setup() {
   // strain row during experiments. Strong enough to give a meaningful
   // stdev as the error column, light enough to keep row rate brisk.
   strain.setSignalAveraging(2);
+  ui.showLcdMessage("Initialising the", "ADCs...");
   strain.begin();                    // discovers 9 NAU7802s, runs host-side tare
+  ui.refresh();                      // restore the main menu on the LCD
 
   // Register experiments here. Each call appends to the runner's list
   // and (via attachRunner below) makes it appear in the LCD submenu.

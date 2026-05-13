@@ -54,6 +54,8 @@ adcCount	KEYWORD2
 registerExperiment	KEYWORD2
 attachRunner	KEYWORD2
 attachStrain	KEYWORD2
+showLcdMessage	KEYWORD2
+refresh	KEYWORD2
 requestRun	KEYWORD2
 requestRunByName	KEYWORD2
 requestAbort	KEYWORD2

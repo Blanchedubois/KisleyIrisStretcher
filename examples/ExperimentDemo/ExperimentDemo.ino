@@ -69,7 +69,9 @@ void setup() {
 
   ui.setUseInternalPulldown(true);
   ui.begin();
+  ui.showLcdMessage("Initialising the", "ADCs...");
   strain.begin();
+  ui.refresh();
 
   // Tune the runner if you want different timing.
   runner.setHoldMs(2000);                // dwell at each waypoint, ms

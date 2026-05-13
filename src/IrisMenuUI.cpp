@@ -175,6 +175,30 @@ void IrisMenuUI::attachStrain(IrisStrainArray& strain) {
   _xSignalAvgValue = strain.signalAveraging();
 }
 
+void IrisMenuUI::showLcdMessage(const char* line0, const char* line1) {
+  _lcd.clear();
+  if (line0) {
+    _lcd.setCursor(0, 0);
+    _lcd.print(line0);
+  }
+  if (line1) {
+    _lcd.setCursor(0, 1);
+    _lcd.print(line1);
+  }
+}
+
+void IrisMenuUI::refresh() {
+  switch (_ui) {
+    case UiState::MENU:                 drawMenu();              break;
+    case UiState::EDIT_XSPEED:          drawEditXspeed();        break;
+    case UiState::EDIT_XGOTO:           drawEditXgoto();         break;
+    case UiState::EDIT_XSIGNALAVG:      drawEditXsignalavg();    break;
+    case UiState::EXPERIMENTS_MENU:     drawExperimentsMenu();   break;
+    case UiState::RUNNING_EXPERIMENT:   drawRunningExperiment(); break;
+    default:                            drawMenu();              break;
+  }
+}
+
 // ---- Drawing ----
 
 void IrisMenuUI::drawMenu() {
