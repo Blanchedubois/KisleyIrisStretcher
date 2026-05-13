@@ -73,6 +73,10 @@ void setup() {
   ui.setUseInternalPulldown(true);
   ui.begin();                        // brings up Wire (SDA=3, SCL=4) + LCD
 
+  // Permanent firmware setting for the Kisley rig: 2-sample averaging per
+  // strain row during experiments. Strong enough to give a meaningful
+  // stdev as the error column, light enough to keep row rate brisk.
+  strain.setSignalAveraging(2);
   strain.begin();                    // discovers 9 NAU7802s, runs host-side tare
 
   // Register experiments here. Each call appends to the runner's list
