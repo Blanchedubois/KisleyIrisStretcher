@@ -2,212 +2,480 @@
 
 Arduino library for the **Kisley Lab iris stretcher** (Case Western
 Reserve University) — a stepper-driven mechanical iris that radially
-stretches a sample to a programmable expansion ratio.
+stretches a sample to a programmable expansion ratio while reading
+nine NAU7802 strain-gauge ADCs for force feedback.
 
-This library is the modular refactor of `IrisModule1.0.ino`. It exposes
-a small high-level API so other labs can drop in a single 15-line sketch
-and either run the rig as-is or build their own experiments on top.
+The library refactors what used to be a ~800-line monolithic sketch
+(`IrisModule1.0.ino`) into seven composable C++ classes. It runs the
+canonical rig with a single ~80-line sketch, lets other labs swap in
+different geometry/wiring without touching library source, and ships
+an "Experiments" framework so a researcher defines an expansion
+sequence as a `float` array and the firmware drives the motor through
+it while streaming synchronised CSV data.
+
+---
+
+## What it does
+
+| Capability | API entry point |
+|---|---|
+| Drive the stepper to a target expansion ratio (CW or CCW) | `IrisStretcher::gotoExpansion(signedEx)` |
+| Solve inverse kinematics (Ex → crank angle θ) | `IrisKinematics::findTheta(geo, Ex)` |
+| LCD + encoder + buttons menu with editable Xspeed/Xgoto screens | `IrisMenuUI::begin/update` |
+| Serial command parser (`Xgoto`, `Xrun`, `Xstrain`, …) | `IrisSerialConsole::begin/update` |
+| Read 9 NAU7802 strain ADCs across 2 TCA9548A muxes with signal averaging + Bessel-corrected stdev | `IrisStrainArray::acquireRow` |
+| Define + run an ordered expansion sequence with synchronised CSV output | `IrisExperimentRunner::registerExperiment` |
+
+---
+
+## Hardware
+
+- **ESP32-S3** (Arduino-ESP32 core). `library.properties` declares
+  `architectures=esp32` — other architectures are not supported.
+- **HD44780 16×2 I²C LCD** (any backpack at 0x20–0x3F; auto-detected).
+- **Rotary encoder** with detent, plus **MENU / DOWN / ACCEPT** buttons.
+- **STEP/DIR stepper driver** (DRV8825, TMC2208, etc.).
+- **9× NAU7802 strain ADCs** behind two **TCA9548A I²C muxes** at
+  `0x71` and `0x73`. Default wiring: 5 ADCs on Mux A channels 0..4,
+  4 ADCs on Mux B channels 0..3. Override with
+  `IrisStrainArray::setLayout()`.
+
+Default pinout (configurable):
+
+| Function | ESP32-S3 pin |
+|---|---|
+| STEP / DIR | GPIO 12 / 13 |
+| I²C SDA / SCL | GPIO 3 / 4 |
+| MENU / DOWN / ACCEPT button | A0 / A1 / A2 |
+| Encoder switch / B / A | A3 / A4 / A5 |
+
+Buttons use `INPUT_PULLDOWN` (active-HIGH) by default. Set
+`ui.setUseInternalPulldown(false)` for boards with external pulldowns.
 
 ---
 
 ## Install
 
-**Arduino IDE → Sketch → Include Library → Add .ZIP Library…**, point at
-this folder zipped, or symlink it into `~/Documents/Arduino/libraries/`.
+**Arduino IDE → Sketch → Include Library → Add .ZIP Library…**, point
+at this repo zipped, or symlink the repo into
+`~/Documents/Arduino/libraries/`.
 
-Dependencies (auto-installed by Library Manager, or install yourself):
+Dependencies (auto-installed via Library Manager or `library.properties`):
 
 - `AccelStepper`
 - `hd44780` (Bill Perry)
-- `Adafruit NAU7802` *(only if you use the strain ADC)*
+- `Adafruit NAU7802`
+- `Adafruit BusIO` (transitive)
 
-Target board: **ESP32-S3** (Arduino-ESP32 core). The library is single-
-architecture by design — `library.properties` declares `architectures=esp32`.
+---
 
-## Quick start (parity with the original IrisModule1.0)
+## Quick start
+
+The shortest sketch that brings up the full rig and exposes one
+experiment:
 
 ```cpp
 #include <USB.h>
 #include <KisleyIrisStretcher.h>
 using namespace kisley::iris;
 
-IrisStretcher stretcher(/*STEP=*/12, /*DIR=*/13);
-IrisMenuUI    ui(stretcher, IrisMenuUI::Pins{A0, A1, A2, A5, A4, A3, 3, 4});
-IrisSerialConsole console(stretcher);
+IrisStretcher        stretcher(/*STEP=*/12, /*DIR=*/13);
+IrisStrainArray      strain;
+IrisMenuUI           ui(stretcher, IrisMenuUI::Pins{A0, A1, A2, A5, A4, A3, 3, 4});
+IrisSerialConsole    console(stretcher);
+IrisExperimentRunner runner(stretcher, strain);
+
+// One experiment: expand to 3.4× and return to center.
+const float kExp1Targets[] = { 1.0f, 3.4f, 1.0f };
+const IrisExperiment kExp1 = { "Exp1", kExp1Targets, 3 };
 
 void setup() {
   USB.begin();
   Serial.begin(115200);
-  while (!Serial) {}
+  while (!Serial && millis() < 2000) {}
+
   stretcher.begin();
   ui.begin();
+  strain.begin();
+  runner.registerExperiment(kExp1);
+  ui.attachRunner(runner);
+  console.attachRunner(runner);
   console.begin();
 }
 
 void loop() {
   ui.update();
   console.update();
+  runner.update();
 }
 ```
 
-The `examples/IrisModule1.0/` sketch is a fully-annotated version of
-the above and reproduces the original firmware behavior 1:1 — same
-splash screen, menu items, encoder feel, serial banner, and command
-responses.
+That's everything — the LCD now has all the built-in menu items plus
+an **Experiments** entry containing `Exp1`, the serial port accepts
+every `X…` command, and 9 strain channels are live.
 
-## API at a glance
+`examples/IrisModule1.0/IrisModule1.0.ino` is the canonical Kisley-rig
+version of this sketch with full about-screen / banner customisation.
 
-| Class | Purpose | Key methods |
+---
+
+## Library architecture
+
+```
+                            +---------------------+
+                            |   loop() of sketch  |
+                            +----------+----------+
+                                       |
+              +------------------------+------------------------+
+              |                        |                        |
+              v                        v                        v
+       IrisMenuUI               IrisSerialConsole       IrisExperimentRunner
+       (LCD + buttons)          (X-command parser)      (motion + logging
+              |                        |                state machine)
+              |                        |                        |
+              +------------+-----------+--------+---------------+
+                           |                    |
+                           v                    v
+                    IrisStretcher         IrisStrainArray
+                    (facade)              (9 NAU7802s
+                       |                   across 2 muxes)
+              +--------+--------+
+              v        v        v
+        IrisStepper  IrisGeo  IrisKinematics
+        Driver       metry    (computeEx,
+        (STEP/DIR             findTheta)
+        bit-bang)
+```
+
+The seven classes split cleanly along these lines:
+
+| Class | Responsibility | Calls |
 |---|---|---|
-| `IrisGeometry` | Mechanical constants (`r0`, `rp`, `Y0`, gear ratio, …) | direct field access |
-| `IrisStretcher` | High-level motion + kinematics facade | `gotoExpansion`, `goToZero`, `setZeroHere`, `calibrate`, `setBladeSpeed`, `currentSteps`, `currentTheta` |
-| `IrisMenuUI` | LCD + encoder + buttons state machine | `begin`, `update`, `registerMenuItem`, `setInvertEncoder`, `setUseInternalPulldown`, `setAboutInfo` |
-| `IrisSerialConsole` | `X<command>` line parser | `begin`, `update`, `registerCommand`, `printBanner`, `printHelp` |
-| `IrisStrainNAU7802` | Optional 24-bit single-chip strain gauge ADC | `begin`, `readVolts` |
-| `IrisStrainArray` | Multi-mux strain-gauge array (9 NAU7802s on the Kisley rig) | `begin`, `acquireRow`, `tare`, `printCsvRow` |
-| `IrisExperiment` / `IrisExperimentRunner` | Define ordered expansion sequences and stream synchronised CSV data | `registerExperiment`, `requestRun`, `update` |
-| `IrisKinematics` | Pure-math forward/inverse maps (static) | `computeEx`, `findTheta` |
+| `IrisGeometry` | POD of mechanical constants (`r0`, `rp`, `Y0`, gear ratio, `maxEx`, …) | — |
+| `IrisKinematics` | Pure-math forward/inverse maps between θ and Eₓ (double precision; bisection + Newton-Raphson) | reads `IrisGeometry` |
+| `IrisStepperDriver` | Blocking STEP/DIR bit-bang motion; keeps `AccelStepper` as the position counter | — |
+| `IrisStretcher` | High-level facade: `gotoExpansion`, `goToZero`, `calibrate`, `setBladeSpeed`. Composes `IrisGeometry + IrisKinematics + IrisStepperDriver`. | — |
+| `IrisMenuUI` | LCD + encoder + buttons state machine. Menu, edit screens (Xspeed/Xgoto), Help/About scrolling, Experiments submenu. | `IrisStretcher`, optional `IrisExperimentRunner` |
+| `IrisSerialConsole` | `X<command>` line parser with built-ins + lab-registered commands. | `IrisStretcher`, optional `IrisExperimentRunner` |
+| `IrisStrainArray` | Multi-mux NAU7802 reader. Round-robin signal averaging, host-side tare, CSV emit. | `Adafruit_NAU7802` |
+| `IrisExperiment` / `IrisExperimentRunner` | POD descriptor + cooperative state machine that drives motion + logging. | `IrisStretcher`, `IrisStrainArray` |
+
+Each class is also usable standalone — for example, a headless rig can
+skip `IrisMenuUI` entirely and drive everything from `IrisSerialConsole`,
+or a sketch that doesn't have strain ADCs simply doesn't instantiate
+`IrisStrainArray`.
+
+---
+
+## Driving the motor
+
+### Signed-Ex convention
+
+`IrisStretcher::gotoExpansion(double signedEx)` is the one motion
+primitive. Sign of the argument picks rotation direction:
+
+| Input | Direction | Effect |
+|---|---|---|
+| `gotoExpansion(1.35)` | CW | `θ = +findTheta(1.35)` |
+| `gotoExpansion(-1.35)` | CCW | `θ = -findTheta(1.35)` |
+| `gotoExpansion(1.0)` (any sign) | center | `θ = 0` (returns to zeroed step) |
+| `\|Ex\| ≥ maxEx` | error | logged to Serial, no motion |
+
+The motor's step counter is **signed and absolute** — `currentSteps()`
+goes up while moving CW, down while moving CCW. Round-tripping
+`1.3 CW → 1.0 → 1.3 CW` lands on byte-identical step positions, and
+`1.3 CW → 1.3 CCW` lands on exactly mirrored steps. See
+`BIDIRECTIONAL_XGOTO.md` for the kinematic rationale.
+
+### LCD UX
+
+The `Xgoto` edit screen lets you scrub a magnitude in `[1.0, maxEx]`
+with the encoder while the **DOWN** button toggles CW ↔ CCW, **SW**
+toggles fine (0.001) / coarse (0.05) step size, and **ACCEPT** commits.
+Display reads `"1.350 CW  [SW]"` or `"1.350 CCW [SW]"`.
 
 ### Serial commands
 
 | Command | Effect |
 |---|---|
-| `Xgoto <Ex> [cw\|ccw]` | Move to magnitude `Ex` in `[1.0, maxEx]`. Direction defaults to `cw`; `ccw` rotates the motor the same θ magnitude in the opposite direction. `Ex` at or below 1.0 returns to center (θ=0). |
+| `Xgoto <Ex> [cw\|ccw]` | Move to magnitude `Ex` in `[1.0, maxEx]`. Direction defaults to `cw`. `Ex ≤ 1.0` returns to center. |
 | `Xzero` | Drive the motor back to θ = 0 |
 | `XsetZero` | Reset the position counter to 0 at the current pose |
 | `Xcalibrate` | Run the calibration routine |
 | `Xspeed <cm/s>` | Set blade speed (recomputes step delay) |
-| `Xstrain` | Toggle continuous 9-ADC CSV streaming on/off |
-| `Xrun <name>` | Run a registered experiment by name (`Xrun list` to enumerate) |
-| `Xabort` | Abort the currently running experiment (between motion segments) |
+| `Xstrain` | Toggle continuous 9-ADC CSV streaming |
+| `Xrun <name>` | Run a registered experiment (`Xrun list` enumerates) |
+| `Xabort` | Abort a running experiment (honoured between motion segments) |
 | `Xhelp` | Print this list |
 
-### Defining and running experiments
+---
+
+## Reading strain — `IrisStrainArray`
 
 ```cpp
-#include <KisleyIrisStretcher.h>
-using namespace kisley::iris;
-
-IrisStretcher        stretcher(12, 13);
-IrisStrainArray      strain;
-IrisMenuUI           ui(stretcher, /* pins */);
-IrisSerialConsole    console(stretcher);
-IrisExperimentRunner runner(stretcher, strain);
-
-// 1. Define waypoints (signed Ex; positive=CW, negative=CCW, |Ex|≤1=center).
-const float kExp1Targets[] = { 1.0f, 3.4f, 1.0f };
-const IrisExperiment kExp1 = { "Exp1", kExp1Targets, 3 };
+IrisStrainArray strain;       // default = Kisley rig 9-slot layout
 
 void setup() {
-  /* ... usual init ... */
-  strain.begin();
-  runner.registerExperiment(kExp1);
-  ui.attachRunner(runner);
-  console.attachRunner(runner);
+  strain.begin();             // discover muxes, init each NAU7802, host-side tare
 }
 
 void loop() {
-  ui.update();
-  console.update();
-  runner.update();   // <- drives the experiment state machine
+  IrisStrainArray::Row row;
+  strain.acquireRow(row);     // round-robin N samples, mean + stdev per chip
+  strain.printCsvRow(Serial, row);
 }
 ```
 
-The LCD's main menu gains an "Experiments" entry; selecting it pushes
-into a submenu listing every registered experiment. ACCEPT runs;
-MENU aborts. CSV output per row:
-`exp,t_ms,steps,target_ex,state,ADC1_mean,ADC1_std,…,ADC9_mean,ADC9_std`.
+**Row contents** for each chip:
 
-See `examples/ExperimentDemo/` for stepped, bidirectional, and
-`customRun`-based examples.
+- `row.mean[i]` — round-half-away-from-zero integer mean of N raw samples
+  minus the boot-time baseline (raw counts)
+- `row.std[i]` — Bessel-corrected sample standard deviation (float)
+- `row.present[i]` — false if the chip wasn't detected at `begin()`;
+  CSV emits `NaN,NaN` for missing chips
 
-**On the LCD**, the Xgoto edit screen shows magnitude + direction:
-`"1.350 CW  [SW]"` or `"1.350 CCW [SW]"`. The encoder edits magnitude
-(range `[1.0, maxEx]`); the **DOWN** button toggles CW ↔ CCW; **SW**
-toggles fine/coarse; **ACCEPT** commits.
+**Configuration knobs** (call before `begin()`):
 
-Step count is signed and absolute, so a round-trip
-`1.3 CW → 1.0 → 1.3 CW` lands on byte-identical step positions, and
-`1.3 CW → 1.3 CCW` lands on exactly mirrored steps. See
-`BIDIRECTIONAL_XGOTO.md` for the kinematic rationale.
-
-**API equivalent** for programmatic use:
 ```cpp
-stretcher.gotoExpansion( 1.35);  // CW
-stretcher.gotoExpansion(-1.35);  // CCW (same θ magnitude, opposite direction)
-stretcher.gotoExpansion( 1.0);   // center
+strain.setSignalAveraging(8);     // N samples per chip per row (default 4)
+strain.setTareSamples(32);        // baseline samples at boot (default 16)
+strain.setI2cClock(10000);        // bus clock Hz (default 10 kHz — see Design notes)
+strain.setSdaScl(3, 4);           // I²C pins
+strain.setLayout(myLayout, 6);    // override the 9-slot Kisley default
 ```
 
-## Wiring
+CSV header / row format:
 
-| Function | ESP32-S3 pin |
-|---|---|
-| STEP | GPIO 12 |
-| DIR | GPIO 13 |
-| I2C SDA | GPIO 3 |
-| I2C SCL | GPIO 4 |
-| MENU button | A0 |
-| DOWN button | A1 |
-| ACCEPT button | A2 |
-| Encoder switch | A3 |
-| Encoder B | A4 |
-| Encoder A | A5 |
+```
+t_ms,ADC1_mean,ADC1_std,ADC2_mean,ADC2_std,…,ADC9_mean,ADC9_std
+12345,−12,1.21,−8,0.95,…
+```
 
-Buttons are wired with `INPUT_PULLDOWN` (active HIGH). Set
-`ui.setUseInternalPulldown(false)` if your board uses external pulldowns.
+---
 
-## Extending the library
+## Experiments
 
-Other labs building custom experiments on the rig can add behavior
-without forking library source:
+An **experiment** is a named sequence of signed Ex targets. Hold time
+between waypoints is a global setting on the runner (default 2 s).
+
+### Defining
 
 ```cpp
-void runMyExperiment(IrisMenuUI&, void*) {
-  stretcher.gotoExpansion(1.5);
-  delay(2000);
-  stretcher.gotoExpansion(2.0);
-}
+const float kExp1Targets[] = { 1.0f, 3.4f, 1.0f };
+const IrisExperiment kExp1 = { "Exp1", kExp1Targets, 3 };
 
-void cmdSweep(const char* args, void* user) {
-  for (float ex = 1.1; ex <= 3.0; ex += 0.1) {
-    stretcher.gotoExpansion(ex);
+const float kRoundTrip[] = { 1.0f, 2.0f, 1.0f, -2.0f, 1.0f };
+const IrisExperiment kExp2 = { "Exp2", kRoundTrip, 5 };
+```
+
+Signed Ex semantics are the same as `gotoExpansion`:
+positive = CW, negative = CCW, `|Ex| ≤ 1.0` = center.
+
+### Registering
+
+```cpp
+runner.registerExperiment(kExp1);
+runner.registerExperiment(kExp2);
+ui.attachRunner(runner);          // adds an "Experiments" submenu to the LCD
+console.attachRunner(runner);     // wires Xrun / Xabort / Xstrain
+```
+
+### Running
+
+- **From the LCD**: main menu → `Experiments` → ACCEPT → scroll to
+  the experiment → ACCEPT. Mid-run the LCD shows `Exp1 2/3` on row 0
+  and `2.00 CW M` (or `H`) on row 1. **MENU** during run requests an
+  abort.
+- **From serial**: `Xrun Exp1`. Stream `Xrun list` to enumerate
+  registered names. `Xabort` interrupts.
+
+### Output
+
+One CSV stream per run, emitted to `Serial`. Header:
+
+```
+exp,t_ms,steps,target_ex,state,ADC1_mean,ADC1_std,…,ADC9_mean,ADC9_std
+```
+
+Per row:
+
+```
+Exp1,12345,4123,3.400,M,1234,1.21,−567,0.98,…
+Exp1,12545,4280,3.400,M,1240,1.19,…
+Exp1,14600,4525,3.400,H,1244,0.85,…
+```
+
+Columns:
+
+- `exp` — experiment name, or `Xstrain` for continuous-streaming mode
+- `t_ms` — `millis()` at sample acquisition
+- `steps` — motor's signed absolute step count
+- `target_ex` — magnitude of the current commanded Ex
+- `state` — `M` (motor moving) / `H` (holding at waypoint) /
+  `S` (continuous strain stream, no experiment)
+- `ADCk_mean / ADCk_std` — what `IrisStrainArray::acquireRow` produced
+
+### Timing knobs
+
+```cpp
+runner.setHoldMs(2000);                 // dwell at each waypoint
+runner.setMotionLogPeriodMs(200);       // CSV row cadence while moving
+runner.setHoldLogPeriodMs(100);         // CSV row cadence while holding
+```
+
+### Custom run functions
+
+For ramps, oscillations, or anything not expressible as a step array,
+supply a `customRun` callback instead of `targets`:
+
+```cpp
+void runRamp(IrisExperimentRunner& r, void* /*user*/) {
+  for (float ex = 1.1f; ex <= 3.0f; ex += 0.05f) {
+    // call stretcher / emitRow / millis() yourself…
   }
+}
+const IrisExperiment kRamp = { "Ramp", nullptr, 0, runRamp };
+```
+
+See `examples/ExperimentDemo/` for a working `customRun` skeleton.
+
+---
+
+## Extending the UI / serial
+
+Beyond experiments, the library accepts arbitrary menu items and
+serial commands without library edits:
+
+```cpp
+void doThing(IrisMenuUI&, void*) {
+  // your code
+}
+
+void cmdSweep(const char* args, void* /*user*/) {
+  for (float ex = 1.1f; ex <= 3.0f; ex += 0.1f) stretcher.gotoExpansion(ex);
 }
 
 void setup() {
-  /* ... usual init ... */
-  ui.registerMenuItem("MyExp", runMyExperiment);
+  /* usual init */
+  ui.registerMenuItem("DoThing", doThing);
   console.registerCommand("sweep", "Run 1.1→3.0 sweep", cmdSweep);
 }
 ```
 
-A higher-level "Experiments" subsystem built on these hooks is on the
-roadmap.
+The LCD menu grows automatically; `Xsweep` becomes a valid serial
+verb. Up to 16 menu items and 8 custom commands by default
+(`MAX_MENU_ITEMS` / `MAX_CUSTOM_CMDS` in their respective headers).
 
-## Differences from monolithic `IrisModule1.0.ino`
+---
 
-These are deliberate corrections vs. the original 794-line sketch:
+## Tuning geometry
 
-1. **Encoder switch press in Xspeed/Xgoto edit screens now toggles
-   fine/coarse only.** The original code intended SW to *also* commit, but
-   a double-`fell()` consumption bug meant only ACCEPT could commit.
-   Observable behavior unchanged; dead branch removed.
-2. **Help and About scroll screens are non-blocking.** The original used
-   `delay()` totaling ~7 s. The new version uses millis-based paging so
-   the encoder and serial reader stay responsive, and pressing ACCEPT or
-   MENU during scrolling returns to the main menu immediately.
-3. **Kinematics promoted to `double` end-to-end.** The original mixed
-   `float` arithmetic with `1e-10` Newton-Raphson tolerances that fell
-   below float epsilon (~1.2e-7). Free on ESP32-S3 FPU.
-4. **Verbose debug prints removed from inside the math.** The original
-   called `Serial.print` on every kinematics evaluation, which fired
-   hundreds of times per `Xgoto`.
-5. **Lab name spelling.** The original firmware printed "Kisely Lab" /
-   "KiselyLab"; corrected to **Kisley** throughout.
+If your rig has different link lengths or gear ratio, supply your own
+`IrisGeometry` at construction:
 
-The default example sketch sets `console.setBannerLine("|KisleyLab V2.1 |")`
-to match the original `verBuf=2.1` runtime banner.
+```cpp
+IrisGeometry myGeo;
+myGeo.r0   = 6.5f;
+myGeo.rp   = 5.0f;
+myGeo.Y0   = -6.0f;
+myGeo.g    = 20.0f;
+myGeo.maxEx = 5.0f;
+IrisStretcher stretcher(12, 13, myGeo);
+```
+
+`IrisKinematics::findTheta` automatically adapts — no code change.
+
+---
+
+## Design notes and gotchas
+
+These are the non-obvious decisions baked into the library.
+Several were dearly bought during debugging.
+
+1. **I²C clock pinned at 10 kHz** for the strain array. The Kisley rig
+   bus is signal-marginal at 100 kHz (long unshielded jumpers, weak
+   downstream pullups on the muxes). 10 kHz works reliably; bus speed
+   for the LCD on the same wires is unaffected.
+
+2. **`Adafruit_I2CDevice::begin()` resets the Wire clock.** Internally
+   it calls `Wire.begin()` with no args, which on ESP32 resets the
+   clock to default 100 kHz. `IrisStrainArray` restores 10 kHz after
+   every `nau.begin()` call.
+
+3. **Deselect every mux before selecting any channel.** If you skip
+   this, transitioning from Mux A ch4 → Mux B ch0 leaves Mux A still
+   routing ch4 — two NAU7802s end up on the bus simultaneously and
+   register reads collide.
+
+4. **Host-side tare, no `calibrate(OFFSET)`.** Adafruit's
+   `Adafruit_NAU7802::calibrate()` has an inverted wait-loop
+   (`while (!cal_start.read())` exits immediately because the bit was
+   just written 1). The function returns before calibration completes,
+   leaving the chip stuck mid-cal. `IrisStrainArray::tare()`
+   averages N raw samples on the host side and subtracts.
+
+5. **Kinematics in double precision.** The original sketch mixed
+   `float`/`double` with `1e-10` Newton-Raphson tolerances that fell
+   below float epsilon (~1.2e-7). Free on ESP32-S3 FPU; meaningful
+   tolerances.
+
+6. **Step counter is signed and absolute.** Every `gotoExpansion`
+   computes `targetSteps` from absolute θ rather than as a delta, so
+   repeated `1.3 → 1.0 → 1.3` round-trips land on identical step
+   positions. Necessary for measurement repeatability.
+
+7. **Experiments are cooperative.** Motion (one `gotoExpansion` per
+   waypoint) is blocking, but hold time is non-blocking — the main
+   `loop()` keeps polling UI + serial during holds. Aborts are
+   detected between motion segments, not mid-stride. Future work:
+   integrate an abort check inside `IrisStepperDriver::rotateThetaRadians`
+   for instant abort.
+
+---
+
+## Repository contents
+
+```
+KisleyIrisStretcher/
+├── library.properties               Arduino metadata (v2.0.0)
+├── keywords.txt                     IDE syntax highlighting
+├── README.md                        this file
+├── BIDIRECTIONAL_XGOTO.md           why Xgoto accepts signed values
+├── EXPERIMENTS_PLAN.md              design rationale for the experiments subsystem
+├── src/
+│   ├── KisleyIrisStretcher.h        umbrella header (one include for all)
+│   ├── IrisGeometry.h
+│   ├── IrisKinematics.h / .cpp
+│   ├── IrisStepperDriver.h / .cpp
+│   ├── IrisStretcher.h / .cpp
+│   ├── IrisMenuUI.h / .cpp
+│   ├── IrisSerialConsole.h / .cpp
+│   ├── IrisStrainNAU7802.h / .cpp   single-chip ADC adapter
+│   ├── IrisStrainArray.h / .cpp     9-chip strain array (NEW in v2)
+│   ├── IrisExperiment.h / .cpp      experiment descriptor + runner (NEW in v2)
+│   └── internal/
+│       ├── DebouncedButton.h
+│       └── QuadEncoder.h
+├── examples/
+│   ├── IrisModule1.0/               canonical Kisley rig firmware (boots Exp1 ready)
+│   ├── ExperimentDemo/              shows Exp1 / Exp2 / Exp3 + customRun
+│   ├── MinimalSerialOnly/           headless, no LCD
+│   └── CustomGeometry/              geometry override demo
+└── extras/
+    └── StrainArray9/                standalone strain-array reference sketch
+```
+
+---
 
 ## License
 
 MIT — see `LICENSE`.
+
+---
+
+## Lab
+
+Built for the [Kisley Lab](https://engineering.case.edu/lab/kisely-lab),
+Case Western Reserve University. The strain rig hardware verification
+and most of the design feedback came from rig-side debugging sessions —
+the "Design notes and gotchas" section is the post-mortem.
