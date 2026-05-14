@@ -256,7 +256,7 @@ void loop() {
 **Configuration knobs** (call before `begin()`):
 
 ```cpp
-strain.setSignalAveraging(8);     // N samples per chip per row (default 4)
+strain.setSignalAveraging(8);     // N samples per chip per row (default 2)
 strain.setTareSamples(32);        // baseline samples at boot (default 16)
 strain.setI2cClock(10000);        // bus clock Hz (default 10 kHz — see Design notes)
 strain.setSdaScl(3, 4);           // I²C pins

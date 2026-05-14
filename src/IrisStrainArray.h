@@ -132,12 +132,15 @@ private:
 
   uint8_t  _sda = 3, _scl = 4;
   uint32_t _i2cClockHz       = 10000;
-  uint16_t _signalAvg        = 4;
+  uint16_t _signalAvg        = 2;   // 2 samples per ADC per row; raise for less noise / lower row rate
   uint16_t _tareSamples      = 16;
   uint16_t _sampleTimeoutMs  = 200;
   uint16_t _muxSettleUs      = 100;
   bool     _waitForReadyOnRead = false;
-  NAU7802_SampleRate _rate   = NAU7802_RATE_320SPS;   // 32× faster than 10 SPS
+  // Library default = NAU7802's documented maximum (320 SPS = enum value 7).
+  // The Adafruit_NAU7802 enum exposes 10/20/40/80/320 SPS; 320 is the ceiling.
+  // Lower this only if you need quieter samples at the cost of throughput.
+  NAU7802_SampleRate _rate   = NAU7802_RATE_320SPS;
 
   // 0xFF = no mux currently routed. Tracking this lets _muxRoute skip
   // the "deselect every other mux" pass when consecutive reads stay on
