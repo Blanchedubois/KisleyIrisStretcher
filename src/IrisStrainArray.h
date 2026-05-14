@@ -66,6 +66,15 @@ public:
   // pin/level settle. Raise if you see occasional bad reads on the
   // first sample after a mux switch.
   void setMuxSettleMicros(uint16_t us);
+  // When true, every per-chip read polls the NAU7802's "conversion ready"
+  // status bit before reading the data register. Defaults to FALSE because
+  // the round-robin acquireRow loop gives each chip ≥ 9 × per-chip-cost
+  // between successive reads (far longer than the chip's sample cycle at
+  // 320 SPS), so a fresh conversion is always waiting in the data register
+  // by the time we route back. Set to TRUE if you have a single-chip
+  // layout and read faster than the chip's sample rate — then you genuinely
+  // need to wait for the next conversion to avoid duplicating the last value.
+  void setWaitForReadyOnRead(bool on);
 
   // ---- Lifecycle ----
   // Scans for the unique mux addresses declared in the layout, initialises
@@ -119,6 +128,7 @@ private:
   uint16_t _tareSamples      = 16;
   uint16_t _sampleTimeoutMs  = 200;
   uint16_t _muxSettleUs      = 100;
+  bool     _waitForReadyOnRead = false;
   NAU7802_SampleRate _rate   = NAU7802_RATE_320SPS;   // 32× faster than 10 SPS
 
   // 0xFF = no mux currently routed. Tracking this lets _muxRoute skip

@@ -250,6 +250,7 @@ strain.setSdaScl(3, 4);           // I²C pins
 strain.setLayout(myLayout, 6);    // override the 9-slot Kisley default
 strain.setSampleRate(NAU7802_RATE_320SPS);   // chip sample rate (default 320 SPS)
 strain.setMuxSettleMicros(100);   // settle delay after mux channel-select (default 100 µs)
+strain.setWaitForReadyOnRead(true); // poll conversion-ready bit before each read (default OFF)
 ```
 
 **Sample rate options**: `NAU7802_RATE_10SPS` (lowest noise) through

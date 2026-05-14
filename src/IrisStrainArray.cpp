@@ -50,6 +50,7 @@ void IrisStrainArray::setTareSamples(uint16_t n)          { _tareSamples = n ? n
 void IrisStrainArray::setSampleTimeoutMs(uint16_t ms)     { _sampleTimeoutMs = ms; }
 void IrisStrainArray::setSampleRate(NAU7802_SampleRate r) { _rate = r; }
 void IrisStrainArray::setMuxSettleMicros(uint16_t us)     { _muxSettleUs = us; }
+void IrisStrainArray::setWaitForReadyOnRead(bool on)      { _waitForReadyOnRead = on; }
 
 void IrisStrainArray::_computeUniqueMuxes() {
   _nMuxes = 0;
@@ -171,9 +172,19 @@ bool IrisStrainArray::_initOneChip(uint8_t i) {
 bool IrisStrainArray::_readOneChipRaw(uint8_t i, int32_t& out) {
   if (!_present[i]) return false;
   const Slot& s = _layout[i];
-  _restoreClock();
+  // _restoreClock() omitted from the steady-state read path: the bus
+  // clock is set in begin()/rescan() (right after the only callers that
+  // reset it — Adafruit_I2CDevice::begin() inside _initOneChip) and is
+  // not perturbed by any operation in the read loop. Calling setClock()
+  // every chip read was harmless but added ~µs × 9 chips × signalAvg
+  // per row.
   _muxRoute(s.muxAddr, s.ch);
-  if (!_waitSample(_sampleTimeoutMs)) return false;
+  // Skip the conversion-ready poll by default. In the round-robin loop
+  // the chip has been converting continuously for ≥ 9 × per-chip-cost
+  // (≫ 1/sampleRate) since we last read it, so the data register always
+  // holds a fresh conversion. Opt back in with setWaitForReadyOnRead(true)
+  // for single-chip layouts that read faster than the chip's sample rate.
+  if (_waitForReadyOnRead && !_waitSample(_sampleTimeoutMs)) return false;
   out = _nau.read();
   return true;
 }
