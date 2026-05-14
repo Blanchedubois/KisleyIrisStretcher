@@ -82,6 +82,14 @@ void setup() {
   // Speed/noise balance tuned for the Kisley rig:
   //   - I2C bus at 50 kHz (5× the safe-default 10 kHz; still well below the
   //     bus's 100 kHz failure point on this wiring)
+  //   - NAU7802 conversion rate explicitly pinned at 320 SPS — the chip's
+  //     documented maximum. Library already defaults to this; the explicit
+  //     call documents the intent and is the right place to dial down if
+  //     a future rig needs less noise per sample (e.g. RATE_80SPS).
+  //   - mux settle wait set to 0 — TCA9548A switches sub-µs and the
+  //     conversion-ready poll is already skipped in the read path, so the
+  //     post-route delay buys nothing on this rig. Raise to ~50 µs if you
+  //     see occasional bad first-reads after a mux switch.
   //   - 2 raw samples averaged per ADC per CSV row — keeps acquireRow under
   //     ~90 ms so it doesn't visibly stall the motor between log rows
   //     during gotoExpansion. Per-row Bessel stdev is ~2× larger than at
@@ -89,6 +97,8 @@ void setup() {
   //     captures where motion smoothness doesn't matter.
   // Dial setI2cClock(10000) to fall back to safe default if you see I2C errors.
   strain.setI2cClock(50000);
+  strain.setSampleRate(NAU7802_RATE_320SPS);
+  strain.setMuxSettleMicros(0);
   strain.setSignalAveraging(2);
   ui.showLcdMessage("Initialising the", "ADCs...");
   strain.begin();                    // discovers 9 NAU7802s, runs host-side tare
