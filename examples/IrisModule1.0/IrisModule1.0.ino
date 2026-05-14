@@ -123,14 +123,24 @@ void setup() {
   // to repaint the current target/step on the screen mid-motion).
   runner.attachUi(ui);
 
-  // One row per motor step: setting the motion-log period to 0 makes
-  // _stepCallback's `(now - _lastLogMs) >= _motionLogMs` check fire
-  // unconditionally, so emitRow runs after every single step pulse.
-  // Each step now becomes: 4 ms pulse + ~90 ms signal-averaged
-  // acquireRow ≈ 10 steps/sec. Slow, but every step is captured with
-  // its own averaged ADC sample. Set back to 200 (or omit) for the
-  // 250 steps/sec mode with periodic sampling.
+  // One row per ODD motor step: setMotionLogEveryNSteps(2) makes the
+  // step callback skip emitRow on even-indexed steps (stepIdx 1, 3, 5,
+  // …), so we only block the step loop with the ~90 ms acquireRow on
+  // half the pulses. Setting motionLogPeriodMs(0) disables the time
+  // gate so the step gate is the only thing throttling emission.
+  //
+  // Per pair of motor steps:
+  //   - stepIdx 0 (odd-numbered):  4 ms pulse + ~90 ms acquireRow
+  //   - stepIdx 1 (even-numbered): 4 ms pulse + 0 ms (skipped)
+  //   ≈ 98 ms per 2 steps → ~20 steps/sec, ~10 Hz row rate.
+  //
+  // Compared to the previous "every step" config this is 2× faster
+  // motor motion while keeping the same wall-clock data rate. Set
+  // setMotionLogEveryNSteps(1) (or remove the call) to log every
+  // single step at ~10 steps/sec. Set N=4 / N=10 for sparser captures
+  // on longer moves.
   runner.setMotionLogPeriodMs(0);
+  runner.setMotionLogEveryNSteps(2);
 
   console.setBannerLine("|KisleyLab V2.1 |");
   console.begin();
