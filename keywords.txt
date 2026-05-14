@@ -77,3 +77,4 @@ setSignalAveraging	KEYWORD2
 setTareSamples	KEYWORD2
 setSampleTimeoutMs	KEYWORD2
 setSampleRate	KEYWORD2
+setMuxSettleMicros	KEYWORD2

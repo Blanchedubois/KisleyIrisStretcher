@@ -60,6 +60,12 @@ public:
   // streaming, noisier per-sample. Default 320 SPS for max throughput;
   // dial down if you see excessive sample noise. Call before begin().
   void setSampleRate(NAU7802_SampleRate r);
+  // Microseconds to settle after writing a mux channel-select. Default
+  // 100 µs — TCA9548A switches in < 1 µs and the NAU7802 is already
+  // converting continuously, so the wait only needs to cover I²C
+  // pin/level settle. Raise if you see occasional bad reads on the
+  // first sample after a mux switch.
+  void setMuxSettleMicros(uint16_t us);
 
   // ---- Lifecycle ----
   // Scans for the unique mux addresses declared in the layout, initialises
@@ -112,7 +118,13 @@ private:
   uint16_t _signalAvg        = 4;
   uint16_t _tareSamples      = 16;
   uint16_t _sampleTimeoutMs  = 200;
+  uint16_t _muxSettleUs      = 100;
   NAU7802_SampleRate _rate   = NAU7802_RATE_320SPS;   // 32× faster than 10 SPS
+
+  // 0xFF = no mux currently routed. Tracking this lets _muxRoute skip
+  // the "deselect every other mux" pass when consecutive reads stay on
+  // the same mux — the dominant case in the round-robin sample loop.
+  uint8_t  _activeMuxAddr    = 0xFF;
 
   Adafruit_NAU7802 _nau;
   bool     _present[MAX_ADCS];

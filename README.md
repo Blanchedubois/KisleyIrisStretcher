@@ -249,6 +249,7 @@ strain.setI2cClock(10000);        // bus clock Hz (default 10 kHz — see Design
 strain.setSdaScl(3, 4);           // I²C pins
 strain.setLayout(myLayout, 6);    // override the 9-slot Kisley default
 strain.setSampleRate(NAU7802_RATE_320SPS);   // chip sample rate (default 320 SPS)
+strain.setMuxSettleMicros(100);   // settle delay after mux channel-select (default 100 µs)
 ```
 
 **Sample rate options**: `NAU7802_RATE_10SPS` (lowest noise) through
@@ -426,7 +427,10 @@ Several were dearly bought during debugging.
 3. **Deselect every mux before selecting any channel.** If you skip
    this, transitioning from Mux A ch4 → Mux B ch0 leaves Mux A still
    routing ch4 — two NAU7802s end up on the bus simultaneously and
-   register reads collide.
+   register reads collide. The library tracks the currently-active
+   mux so the deselect pass is skipped when consecutive reads stay on
+   the same mux (the dominant case in the round-robin sample loop);
+   the deselect still happens on every cross-mux switch.
 
 4. **Host-side tare, no `calibrate(OFFSET)`.** Adafruit's
    `Adafruit_NAU7802::calibrate()` has an inverted wait-loop

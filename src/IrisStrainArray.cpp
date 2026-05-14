@@ -49,6 +49,7 @@ void IrisStrainArray::setSignalAveraging(uint16_t n) {
 void IrisStrainArray::setTareSamples(uint16_t n)          { _tareSamples = n ? n : 1; }
 void IrisStrainArray::setSampleTimeoutMs(uint16_t ms)     { _sampleTimeoutMs = ms; }
 void IrisStrainArray::setSampleRate(NAU7802_SampleRate r) { _rate = r; }
+void IrisStrainArray::setMuxSettleMicros(uint16_t us)     { _muxSettleUs = us; }
 
 void IrisStrainArray::_computeUniqueMuxes() {
   _nMuxes = 0;
@@ -78,22 +79,33 @@ void IrisStrainArray::_muxDeselectAll() {
     _wire->write((uint8_t)0x00);
     _wire->endTransmission();
   }
+  _activeMuxAddr = 0xFF;
 }
 
 void IrisStrainArray::_muxRoute(uint8_t muxAddr, uint8_t ch) {
-  // Deselect every OTHER mux — skip the target mux because the write
-  // that follows overrides its state anyway. One fewer I2C transaction
-  // per chip access, ~5 ms saved per sample at 10 kHz bus speed.
-  for (uint8_t m = 0; m < _nMuxes; m++) {
-    if (_muxAddrs[m] == muxAddr) continue;
-    _wire->beginTransmission(_muxAddrs[m]);
-    _wire->write((uint8_t)0x00);
-    _wire->endTransmission();
+  // Only deselect the OTHER muxes when we're switching FROM a different
+  // mux. Within a run of reads that stay on the same mux (the dominant
+  // case in the round-robin loop — 7 of 9 chip-switches per pass on the
+  // default Kisley layout), the other muxes are already deselected from
+  // the last cross-mux switch, so the deselect transactions are pure
+  // waste. Skipping them cuts ~7 I²C transactions per signal-averaging
+  // pass.
+  if (muxAddr != _activeMuxAddr) {
+    for (uint8_t m = 0; m < _nMuxes; m++) {
+      if (_muxAddrs[m] == muxAddr) continue;
+      _wire->beginTransmission(_muxAddrs[m]);
+      _wire->write((uint8_t)0x00);
+      _wire->endTransmission();
+    }
+    _activeMuxAddr = muxAddr;
   }
   _wire->beginTransmission(muxAddr);
   _wire->write((uint8_t)(1u << ch));
   _wire->endTransmission();
-  delay(1);   // brief settle for mux FETs + chip
+  // Settle after writing the channel select. TCA9548A switches in <1 µs;
+  // the NAU7802 is already converting continuously; the old delay(1) was
+  // paranoia at the cost of 1 ms × (9 chips × signalAvg) per row.
+  if (_muxSettleUs) delayMicroseconds(_muxSettleUs);
 }
 
 bool IrisStrainArray::_waitSample(uint16_t timeoutMs) {
