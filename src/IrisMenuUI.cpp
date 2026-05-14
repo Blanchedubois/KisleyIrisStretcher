@@ -32,6 +32,27 @@ float roundToStep(float x, float st) {
   return (float)((long)lround(x / st)) * st;
 }
 
+// 5-entry sample-rate table for the Xsamplerate screen. Index 0..4 maps
+// to a NAU7802_SampleRate enum value + its label. The NAU7802 enum is
+// non-contiguous (320 SPS = enum value 7), so we keep our own ordered
+// table rather than indexing the enum directly.
+constexpr uint8_t kSampleRateCount = 5;
+const NAU7802_SampleRate kSampleRateEnum[kSampleRateCount] = {
+  NAU7802_RATE_10SPS,
+  NAU7802_RATE_20SPS,
+  NAU7802_RATE_40SPS,
+  NAU7802_RATE_80SPS,
+  NAU7802_RATE_320SPS,
+};
+const uint16_t kSampleRateSps[kSampleRateCount] = { 10, 20, 40, 80, 320 };
+
+uint8_t sampleRateToIndex(NAU7802_SampleRate r) {
+  for (uint8_t i = 0; i < kSampleRateCount; i++) {
+    if (kSampleRateEnum[i] == r) return i;
+  }
+  return kSampleRateCount - 1;  // default to 320 SPS if somehow unknown
+}
+
 } // namespace
 
 IrisMenuUI::IrisMenuUI(IrisStretcher& stretcher, const Pins& pins, Stream& io)
@@ -101,16 +122,18 @@ void IrisMenuUI::begin() {
   }
 
   // Seed built-in menu items.
-  _items[0] = {"XsetZero",    BuiltinKind::XsetZero,    nullptr, nullptr};
-  _items[1] = {"Xzero",       BuiltinKind::Xzero,       nullptr, nullptr};
-  _items[2] = {"Xcalibrate",  BuiltinKind::Xcalibrate,  nullptr, nullptr};
-  _items[3] = {"Xspeed",      BuiltinKind::Xspeed,      nullptr, nullptr};
-  _items[4] = {"Xgoto",       BuiltinKind::Xgoto,       nullptr, nullptr};
-  _items[5] = {"XsignalAverage",  BuiltinKind::Xsignalavg,  nullptr, nullptr};
-  _items[6] = {"Xhelp",       BuiltinKind::Xhelp,       nullptr, nullptr};
-  _items[7] = {"Xabout",      BuiltinKind::Xabout,      nullptr, nullptr};
-  _items[8] = {"Xexperiments", BuiltinKind::Experiments, nullptr, nullptr};
-  _itemCount = 9;
+  _items[0]  = {"XsetZero",       BuiltinKind::XsetZero,    nullptr, nullptr};
+  _items[1]  = {"Xzero",          BuiltinKind::Xzero,       nullptr, nullptr};
+  _items[2]  = {"Xcalibrate",     BuiltinKind::Xcalibrate,  nullptr, nullptr};
+  _items[3]  = {"Xspeed",         BuiltinKind::Xspeed,      nullptr, nullptr};
+  _items[4]  = {"Xgoto",          BuiltinKind::Xgoto,       nullptr, nullptr};
+  _items[5]  = {"XsignalAverage", BuiltinKind::Xsignalavg,  nullptr, nullptr};
+  _items[6]  = {"Xsamplerate",    BuiltinKind::Xsamplerate, nullptr, nullptr};
+  _items[7]  = {"XlogEveryN",     BuiltinKind::XlogEveryN,  nullptr, nullptr};
+  _items[8]  = {"Xhelp",          BuiltinKind::Xhelp,       nullptr, nullptr};
+  _items[9]  = {"Xabout",         BuiltinKind::Xabout,      nullptr, nullptr};
+  _items[10] = {"Xexperiments",   BuiltinKind::Experiments, nullptr, nullptr};
+  _itemCount = 11;
 
   drawMenu();
 }
@@ -170,11 +193,13 @@ bool IrisMenuUI::registerMenuItem(const char* label,
 
 void IrisMenuUI::attachRunner(IrisExperimentRunner& runner) {
   _runner = &runner;
+  _xLogEveryNValue = runner.motionLogEveryNSteps();
 }
 
 void IrisMenuUI::attachStrain(IrisStrainArray& strain) {
   _strain = &strain;
-  _xSignalAvgValue = strain.signalAveraging();
+  _xSignalAvgValue   = strain.signalAveraging();
+  _xSampleRateIndex  = sampleRateToIndex(strain.sampleRate());
 }
 
 void IrisMenuUI::showLcdMessage(const char* line0, const char* line1) {
@@ -195,6 +220,8 @@ void IrisMenuUI::refresh() {
     case UiState::EDIT_XSPEED:          drawEditXspeed();        break;
     case UiState::EDIT_XGOTO:           drawEditXgoto();         break;
     case UiState::EDIT_XSIGNALAVG:      drawEditXsignalavg();    break;
+    case UiState::EDIT_XSAMPLERATE:     drawEditXsamplerate();   break;
+    case UiState::EDIT_XLOGEVERYN:      drawEditXlogEveryN();    break;
     case UiState::EXPERIMENTS_MENU:     drawExperimentsMenu();   break;
     case UiState::RUNNING_EXPERIMENT:   drawRunningExperiment(); break;
     default:                            drawMenu();              break;
@@ -257,6 +284,29 @@ void IrisMenuUI::drawEditXsignalavg() {
   _lcd.print(_xSignalAvgValue);
   _lcd.print(' ');
   _lcd.print(_xSignalAvgFineMode ? 'F' : 'C');
+  _lcd.print(F("  [SW]"));
+}
+
+void IrisMenuUI::drawEditXsamplerate() {
+  _lcd.clear();
+  _lcd.setCursor(0, 0);
+  _lcd.print("Xsamplerate:");
+  _lcd.setCursor(0, 1);
+  if (_xSampleRateIndex < kSampleRateCount) {
+    _lcd.print(kSampleRateSps[_xSampleRateIndex]);
+    _lcd.print(F(" SPS"));
+  }
+}
+
+void IrisMenuUI::drawEditXlogEveryN() {
+  _lcd.clear();
+  _lcd.setCursor(0, 0);
+  _lcd.print("XlogEveryN");
+  _lcd.setCursor(0, 1);
+  _lcd.print("N=");
+  _lcd.print(_xLogEveryNValue);
+  _lcd.print(' ');
+  _lcd.print(_xLogEveryNFineMode ? 'F' : 'C');
   _lcd.print(F("  [SW]"));
 }
 
@@ -449,6 +499,29 @@ void IrisMenuUI::runCurrentItem() {
         drawEditXsignalavg();
       }
       break;
+    case BuiltinKind::Xsamplerate:
+      if (!_strain) {
+        drawStatus("No strain");
+        _statusUntilMs = millis() + 1200;
+        _ui = UiState::RUNNING;
+      } else {
+        // Reflect the chip's current rate.
+        _xSampleRateIndex = sampleRateToIndex(_strain->sampleRate());
+        _ui = UiState::EDIT_XSAMPLERATE;
+        drawEditXsamplerate();
+      }
+      break;
+    case BuiltinKind::XlogEveryN:
+      if (!_runner) {
+        drawStatus("No runner");
+        _statusUntilMs = millis() + 1200;
+        _ui = UiState::RUNNING;
+      } else {
+        _xLogEveryNValue = _runner->motionLogEveryNSteps();
+        _ui = UiState::EDIT_XLOGEVERYN;
+        drawEditXlogEveryN();
+      }
+      break;
     case BuiltinKind::Xhelp:
       enterHelp();
       break;
@@ -632,6 +705,65 @@ void IrisMenuUI::update() {
         if (_strain) _strain->setSignalAveraging(_xSignalAvgValue);
         drawStatus("N=");
         _lcd.print(_xSignalAvgValue);
+        _statusUntilMs = millis() + 800;
+        _ui = UiState::RUNNING;
+      }
+      if (menuPressed) {
+        _ui = UiState::MENU;
+        drawMenu();
+      }
+    } break;
+
+    case UiState::EDIT_XSAMPLERATE: {
+      // 5 discrete rates — encoder cycles through them. SW is unused
+      // here (no fine/coarse for a discrete enum).
+      if (ed == +1) {
+        _xSampleRateIndex = (_xSampleRateIndex + 1) % kSampleRateCount;
+        drawEditXsamplerate();
+      } else if (ed == -1) {
+        _xSampleRateIndex =
+          (_xSampleRateIndex + kSampleRateCount - 1) % kSampleRateCount;
+        drawEditXsamplerate();
+      }
+      if (acceptPressed) {
+        if (_strain) {
+          _strain->setSampleRate(kSampleRateEnum[_xSampleRateIndex]);
+          _strain->applySampleRateLive();
+          drawStatus("Rate set");
+          _lcd.setCursor(0, 1);
+          _lcd.print(kSampleRateSps[_xSampleRateIndex]);
+          _lcd.print(F(" SPS"));
+        } else {
+          drawStatus("No strain");
+        }
+        _statusUntilMs = millis() + 800;
+        _ui = UiState::RUNNING;
+      }
+      if (menuPressed) {
+        _ui = UiState::MENU;
+        drawMenu();
+      }
+    } break;
+
+    case UiState::EDIT_XLOGEVERYN: {
+      if (encSWPressed) {
+        _xLogEveryNFineMode = !_xLogEveryNFineMode;
+        drawEditXlogEveryN();
+      }
+      const int step = _xLogEveryNFineMode ? 1 : 10;
+      int next = (int)_xLogEveryNValue;
+      if (ed == +1)      next += step;
+      else if (ed == -1) next -= step;
+      if (next < 1)  next = 1;
+      if (next > 99) next = 99;
+      if ((uint16_t)next != _xLogEveryNValue) {
+        _xLogEveryNValue = (uint16_t)next;
+        drawEditXlogEveryN();
+      }
+      if (acceptPressed) {
+        if (_runner) _runner->setMotionLogEveryNSteps(_xLogEveryNValue);
+        drawStatus("N=");
+        _lcd.print(_xLogEveryNValue);
         _statusUntilMs = millis() + 800;
         _ui = UiState::RUNNING;
       }

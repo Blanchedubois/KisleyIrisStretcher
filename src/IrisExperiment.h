@@ -58,6 +58,7 @@ public:
   // Set the time gate to 0 (setMotionLogPeriodMs(0)) if you want purely
   // step-based emission.
   void setMotionLogEveryNSteps(uint16_t n) { _motionLogEveryN = n ? n : 1; }
+  uint16_t motionLogEveryNSteps() const    { return _motionLogEveryN; }
 
   // ---- Experiment registry ----
   // Returns false if MAX_EXPERIMENTS reached.

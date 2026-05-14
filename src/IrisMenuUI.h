@@ -104,12 +104,15 @@ private:
     EDIT_XSPEED,
     EDIT_XGOTO,
     EDIT_XSIGNALAVG,
+    EDIT_XSAMPLERATE,
+    EDIT_XLOGEVERYN,
     EXPERIMENTS_MENU,
     RUNNING_EXPERIMENT,
   };
 
   enum class BuiltinKind : uint8_t {
-    XsetZero, Xzero, Xcalibrate, Xspeed, Xgoto, Xsignalavg, Xhelp, Xabout,
+    XsetZero, Xzero, Xcalibrate, Xspeed, Xgoto, Xsignalavg,
+    Xsamplerate, XlogEveryN, Xhelp, Xabout,
     Experiments, Custom
   };
 
@@ -131,6 +134,8 @@ private:
   void drawExperimentsMenu();
   void drawRunningExperiment();
   void drawEditXsignalavg();
+  void drawEditXsamplerate();
+  void drawEditXlogEveryN();
   void printFloatFixed(float v, uint8_t places);
   void runCurrentItem();
   void enterHelp();
@@ -186,6 +191,16 @@ private:
   IrisStrainArray*  _strain               = nullptr;
   uint16_t          _xSignalAvgValue      = 4;
   bool              _xSignalAvgFineMode   = true;   // fine = ±1, coarse = ±10
+
+  // ---- Xsamplerate edit ----
+  // Index into the 5-entry rate table (10 / 20 / 40 / 80 / 320 SPS). The
+  // NAU7802_SampleRate enum is non-contiguous (320 SPS = 7, not 4), so
+  // we don't store the enum value directly.
+  uint8_t           _xSampleRateIndex     = 4;     // 4 = 320 SPS (chip max)
+
+  // ---- XlogEveryN edit ----
+  uint16_t          _xLogEveryNValue      = 1;
+  bool              _xLogEveryNFineMode   = true;  // fine = ±1, coarse = ±10
 };
 
 } // namespace iris

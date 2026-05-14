@@ -52,6 +52,18 @@ void IrisStrainArray::setSampleRate(NAU7802_SampleRate r) { _rate = r; }
 void IrisStrainArray::setMuxSettleMicros(uint16_t us)     { _muxSettleUs = us; }
 void IrisStrainArray::setWaitForReadyOnRead(bool on)      { _waitForReadyOnRead = on; }
 
+uint8_t IrisStrainArray::applySampleRateLive() {
+  uint8_t ok = 0;
+  for (uint8_t i = 0; i < _nSlots; i++) {
+    if (!_present[i]) continue;
+    const Slot& s = _layout[i];
+    _muxRoute(s.muxAddr, s.ch);
+    _nau.setRate(_rate);
+    ok++;
+  }
+  return ok;
+}
+
 void IrisStrainArray::_computeUniqueMuxes() {
   _nMuxes = 0;
   for (uint8_t i = 0; i < _nSlots; i++) {

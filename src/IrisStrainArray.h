@@ -96,11 +96,19 @@ public:
   void acquireRow(Row& out);
 
   // ---- Inspection ----
-  uint8_t       adcCount()           const { return _nSlots; }
-  bool          isPresent(uint8_t i) const { return i < _nSlots && _present[i]; }
-  const char*   label(uint8_t i)     const { return i < _nSlots ? _layout[i].label : ""; }
-  int32_t       baseline(uint8_t i)  const { return i < _nSlots ? _baseline[i] : 0; }
-  uint16_t      signalAveraging()    const { return _signalAvg; }
+  uint8_t            adcCount()           const { return _nSlots; }
+  bool               isPresent(uint8_t i) const { return i < _nSlots && _present[i]; }
+  const char*        label(uint8_t i)     const { return i < _nSlots ? _layout[i].label : ""; }
+  int32_t            baseline(uint8_t i)  const { return i < _nSlots ? _baseline[i] : 0; }
+  uint16_t           signalAveraging()    const { return _signalAvg; }
+  NAU7802_SampleRate sampleRate()         const { return _rate; }
+
+  // Push the current sample rate (set via setSampleRate) to every already-
+  // initialised chip without re-running begin() / re-taring. Use after a
+  // runtime setSampleRate() call — e.g. from the LCD's Xsamplerate edit —
+  // to make the new rate take effect on chips that were initialised earlier
+  // at a different rate. Returns the count of chips actually updated.
+  uint8_t applySampleRateLive();
 
   // ---- Emitters ----
   // "t_ms,LABEL1_mean,LABEL1_std,LABEL2_mean,LABEL2_std,..."

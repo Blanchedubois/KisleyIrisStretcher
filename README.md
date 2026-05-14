@@ -200,6 +200,19 @@ encoder ±1 in fine mode (SW toggles), ±10 in coarse, range `[1, 256]`,
 ACCEPT commits. Only available when `ui.attachStrain(strain)` was called
 in setup; without it the menu briefly shows "No strain attached".
 
+**Xsamplerate** edits the NAU7802 conversion rate. The chip has five
+discrete rates; the encoder cycles through them (10 / 20 / 40 / 80 /
+320 SPS). ACCEPT commits — `setSampleRate()` stores the value, then
+`applySampleRateLive()` pushes it to every initialised chip in the
+array without a full `begin()`/re-tare (~50 ms total). Requires
+`ui.attachStrain(strain)`.
+
+**XlogEveryN** edits `IrisExperimentRunner::setMotionLogEveryNSteps()`
+— the step-modulo filter on motion CSV emission. Encoder ±1 in fine
+mode (SW toggles), ±10 in coarse, range `[1, 99]`, ACCEPT commits.
+Setting N=2 logs only on the 1st, 3rd, 5th, … step of each
+`gotoExpansion`. Requires `ui.attachRunner(runner)`.
+
 ### Serial commands
 
 | Command | Effect |
