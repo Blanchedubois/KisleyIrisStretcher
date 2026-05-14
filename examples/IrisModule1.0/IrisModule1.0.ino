@@ -73,7 +73,7 @@ void setup() {
   info.creator   = "Tejasvin Shrikanth";
   info.buildDate = __DATE__;
   info.buildTime = __TIME__;
-  ui.setAboutInfo(info);
+  ui.setAboutInfo(info);`   Z
 
   ui.setInvertEncoder(false);
   ui.setUseInternalPulldown(true);
