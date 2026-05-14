@@ -186,7 +186,17 @@ to detect firmware restart.
 
 ### `Xrun Exp1`
 
+Every `Xrun` re-runs the host-side tare before the first CSV row,
+so each stream's per-ADC means are zeroed against the rig's
+pre-run baseline. The tare block (same shape as boot) appears first:
+
 ```
+# Taring 16 samples per chip...
+# IMPORTANT: keep the rig undisturbed for the next few seconds.
+#   ADC1 baseline = -7634  (n=16)
+...
+# Tare complete.
+
 # experiment: Exp1
 # steps: 3
 # motion log every 200 ms
@@ -200,9 +210,20 @@ Exp1,14600,4525,1.000,H,...
 # experiment complete
 ```
 
+A parser should treat the tare baselines emitted here as
+**replacing** the boot-time baselines for analysing this stream —
+they're the more relevant zero.
+
 ### `Xstrain` (toggle ON)
 
+Toggling `Xstrain` ON also re-tares before emitting the CSV header,
+for the same reason. (Toggling OFF does not re-tare.)
+
 ```
+# Taring 16 samples per chip...
+#   ADC1 baseline = -7634  (n=16)
+...
+# Tare complete.
 # Strain streaming: ON
 exp,t_ms,steps,target_ex,state,ADC1_mean,ADC1_std,...,ADC9_mean,ADC9_std
 Xstrain,12345,0,0.000,S,...

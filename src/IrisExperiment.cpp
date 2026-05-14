@@ -48,6 +48,9 @@ bool IrisExperimentRunner::requestRunByName(const char* name) {
 void IrisExperimentRunner::setStreamStrain(bool on) {
   _streamStrain = on;
   if (on) {
+    // Re-tare so every streaming session uses a fresh baseline. Caller
+    // is responsible for the rig being undisturbed at this moment.
+    _strain.tare();
     _emitHeader();
     _lastStreamMs = 0;
   }
@@ -128,6 +131,12 @@ void IrisExperimentRunner::update() {
     }
 
     case State::STARTING: {
+      // Re-tare ADCs before every experiment so the captured strain
+      // values are referenced to the rig's current pre-run baseline.
+      // The motor has not started moving yet — by convention the rig
+      // is undisturbed at this point.
+      _strain.tare();
+
       _io.println();
       _io.print(F("# experiment: ")); _io.println(_curExp->name);
       _io.print(F("# steps: ")); _io.println(_curExp->nTargets);

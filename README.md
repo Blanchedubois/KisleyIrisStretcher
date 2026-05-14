@@ -302,6 +302,14 @@ console.attachRunner(runner);     // wires Xrun / Xabort / Xstrain
 - **From serial**: `Xrun Exp1`. Stream `Xrun list` to enumerate
   registered names. `Xabort` interrupts.
 
+### Pre-run tare
+
+Every `Xrun` and every `Xstrain` ON toggle re-runs the strain array's
+host-side tare before the first CSV row is emitted. The rig should be
+undisturbed at the moment you start the run — the captured baseline
+becomes the zero for every row in that stream. (Boot-time tare in
+`strain.begin()` is unchanged; the per-run tare is additive.)
+
 ### Output
 
 One CSV stream per run, emitted to `Serial`. Header:
