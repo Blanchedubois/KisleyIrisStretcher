@@ -342,9 +342,19 @@ Columns:
 
 ```cpp
 runner.setHoldMs(2000);                 // dwell at each waypoint
-runner.setMotionLogPeriodMs(200);       // CSV row cadence while moving
+runner.setMotionLogPeriodMs(200);       // CSV row cadence while moving (time gate)
 runner.setHoldLogPeriodMs(100);         // CSV row cadence while holding
+runner.setMotionLogEveryNSteps(2);      // step gate: log only every Nth motor step
+                                        // N=2 → 1st, 3rd, 5th, … step of each move
 ```
+
+`setMotionLogEveryNSteps` is a **step-modulo** gate that combines with
+the time gate (`setMotionLogPeriodMs`). A row is emitted only when both
+gates pass — `stepIdx % N == 0` AND the time interval has elapsed.
+For purely step-based emission, set `setMotionLogPeriodMs(0)`. Default
+`N=1` disables the step gate (every step is eligible). The phase is
+per-move: `stepIdx` resets to 0 at the start of each `gotoExpansion`,
+so the first step of every waypoint move always passes.
 
 ### Custom run functions
 

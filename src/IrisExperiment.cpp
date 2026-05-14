@@ -79,9 +79,15 @@ void IrisExperimentRunner::emitRow(char state) {
 
 // ---- Motion with periodic row emission ----
 
-void IrisExperimentRunner::_stepCallback(long /*stepIdx*/, void* /*user*/) {
+void IrisExperimentRunner::_stepCallback(long stepIdx, void* /*user*/) {
   if (!s_activeRunner) return;
   IrisExperimentRunner* r = s_activeRunner;
+  // Step-modulo filter. With N=1 (default) every step is eligible. With
+  // N=2 only stepIdx 0, 2, 4, … pass — i.e. the 1st, 3rd, 5th, … step of
+  // each gotoExpansion ("every odd-numbered step"). Phase is per-move:
+  // each gotoExpansion starts with stepIdx 0, so the first step of every
+  // move always passes regardless of N.
+  if (r->_motionLogEveryN > 1 && (stepIdx % r->_motionLogEveryN) != 0) return;
   uint32_t now = millis();
   if (now - r->_lastLogMs >= r->_motionLogMs) {
     r->emitRow('M');

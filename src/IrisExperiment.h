@@ -49,6 +49,15 @@ public:
   void setMotionLogPeriodMs(uint32_t ms)   { _motionLogMs = ms; }
   void setHoldLogPeriodMs(uint32_t ms)     { _holdLogMs   = ms; }
   void setHoldMs(uint32_t ms)              { _holdMs      = ms; }
+  // Step-modulo filter for motion logging. Default 1 = every step is
+  // eligible (still subject to the time-based motionLogPeriodMs gate).
+  // Set to 2 to only log on every other step (the 1st, 3rd, 5th, … step
+  // of each gotoExpansion — i.e. odd-numbered steps). Set to N to log
+  // one row per N steps. Combines with the time gate: a step row is
+  // emitted only if BOTH `stepIdx % N == 0` AND the time gate has expired.
+  // Set the time gate to 0 (setMotionLogPeriodMs(0)) if you want purely
+  // step-based emission.
+  void setMotionLogEveryNSteps(uint16_t n) { _motionLogEveryN = n ? n : 1; }
 
   // ---- Experiment registry ----
   // Returns false if MAX_EXPERIMENTS reached.
@@ -101,9 +110,10 @@ private:
   Stream&           _io;
 
   // Config
-  uint32_t _motionLogMs = 200;
-  uint32_t _holdLogMs   = 100;
-  uint32_t _holdMs      = 2000;
+  uint32_t _motionLogMs    = 200;
+  uint32_t _holdLogMs      = 100;
+  uint32_t _holdMs         = 2000;
+  uint16_t _motionLogEveryN = 1;  // log every Nth step (1 = no skipping)
 
   // Registry
   const IrisExperiment* _exps[MAX_EXPERIMENTS] = {nullptr};

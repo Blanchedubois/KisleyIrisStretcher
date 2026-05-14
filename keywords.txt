@@ -69,6 +69,7 @@ setStreamStrain	KEYWORD2
 isStreamingStrain	KEYWORD2
 emitRow	KEYWORD2
 setMotionLogPeriodMs	KEYWORD2
+setMotionLogEveryNSteps	KEYWORD2
 setHoldLogPeriodMs	KEYWORD2
 setHoldMs	KEYWORD2
 setLayout	KEYWORD2
