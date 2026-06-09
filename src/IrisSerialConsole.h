@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include "IrisStretcher.h"
+#include "IrisStrainArray.h"
 
 namespace kisley {
 namespace iris {
@@ -37,6 +38,13 @@ public:
   // Xrun list (dump registered names), and Xabort (interrupt a run).
   void attachRunner(IrisExperimentRunner& runner);
 
+  // Attach an IrisStrainArray so the console exposes the strain-tuning
+  // commands that mirror the LCD edit screens:
+  //   XsignalAverage <n>  — samples averaged per ADC per CSV row [1..256]
+  //   Xsamplerate <sps>   — NAU7802 conversion rate (10/20/40/80/320)
+  // Without this attachment those commands report "no strain attached".
+  void attachStrain(IrisStrainArray& strain);
+
   void printBanner();
   void printHelp();
 
@@ -46,6 +54,13 @@ public:
 private:
   void parseCommand();
   bool dispatchBuiltin(const char* cmd, char* tokenizerState);
+
+  // Structured "key=value" report for Xspeed (no move). The Xgoto/Xzero
+  // move report is intrinsic to IrisStretcher so it appears from the LCD
+  // path too. `uptimeMs` is millis() at command receipt — same clock as
+  // the strain/experiment CSV t_ms column.
+  void printSpeedReport(uint32_t uptimeMs, double bladeSpeedCmPerSec,
+                        unsigned long stepHalfPeriodUs, long currentSteps);
 
   static constexpr uint8_t MAX_CMD_LEN     = 64;
   static constexpr uint8_t MAX_CUSTOM_CMDS = 8;
@@ -70,6 +85,7 @@ private:
   const char* _bannerLine = "|KisleyLab V1.0 |";
 
   IrisExperimentRunner* _runner = nullptr;
+  IrisStrainArray*      _strain = nullptr;
 };
 
 } // namespace iris

@@ -38,6 +38,7 @@ setStepLogging	KEYWORD2
 setCalibrationRoutine	KEYWORD2
 setInvertEncoder	KEYWORD2
 setUseInternalPulldown	KEYWORD2
+setEchoCommands	KEYWORD2
 registerMenuItem	KEYWORD2
 registerCommand	KEYWORD2
 readVolts	KEYWORD2

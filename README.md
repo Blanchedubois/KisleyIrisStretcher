@@ -189,6 +189,18 @@ goes up while moving CW, down while moving CCW. Round-tripping
 
 ### LCD UX
 
+**Command echo.** Every action committed from the LCD/encoder GUI also
+prints the equivalent serial command to the console — committing the
+Xgoto edit screen emits `Xgoto 1.350 cw`, the Xspeed screen emits
+`Xspeed 0.10`, running an experiment emits `Xrun Exp1`, and so on. The
+echoed lines use the exact `X…` syntax `IrisSerialConsole` accepts, so a
+serial log of a hands-on LCD session is a replayable command script.
+Disable with `ui.setEchoCommands(false)` (e.g. to avoid one extra line in
+an active experiment CSV stream when aborting from the LCD). The three
+strain/logging edit screens echo `XsignalAverage <n>`, `Xsamplerate
+<sps>`, and `XlogEveryN <n>` — now also accepted as serial commands (see
+the command table above; the strain ones need `console.attachStrain`).
+
 The `Xgoto` edit screen lets you scrub a magnitude in `[1.0, maxEx]`
 with the encoder while the **DOWN** button toggles CW ↔ CCW, **SW**
 toggles fine (0.001) / coarse (0.05) step size, and **ACCEPT** commits.
@@ -223,9 +235,67 @@ Setting N=2 logs only on the 1st, 3rd, 5th, … step of each
 | `Xcalibrate` | Run the calibration routine |
 | `Xspeed <cm/s>` | Set blade speed (recomputes step delay) |
 | `Xstrain` | Toggle continuous 9-ADC CSV streaming |
+| `XsignalAverage <n>` | Samples averaged per ADC per row `[1..256]` (needs `console.attachStrain`) |
+| `Xsamplerate <sps>` | NAU7802 conversion rate: `10/20/40/80/320` (needs `console.attachStrain`) |
+| `XlogEveryN <n>` | Log one motion row per N steps `[1..99]` (needs `console.attachRunner`) |
 | `Xrun <name>` | Run a registered experiment (`Xrun list` enumerates) |
 | `Xabort` | Abort a running experiment (honoured between motion segments) |
 | `Xhelp` | Print this list |
+
+#### Structured reports — `Xgoto` / `Xzero` / `XsetZero` / `Xspeed`
+
+These commands emit an aligned `key = value` block instead of free-form
+chatter. `uptime_ms` is `millis()` at the start of the command — the same
+clock as the strain/experiment CSV `t_ms`, so it lines up with the stream.
+
+The `Xgoto` / `Xzero` / `XsetZero` reports are **intrinsic to
+`IrisStretcher`** — they print whether the command came from the serial
+console *or* the LCD GUI (`gotoExpansion` / `goToZero` / `setZeroHere` own
+them). The experiment runner and the calibration routine suppress them via
+`stretcher.setMoveReporting(false)` so internal moves don't corrupt the CSV
+stream / clutter the routine; call `setMoveReporting(true)` to re-enable, or
+`false` to silence them yourself. The `Xspeed` report is produced by the
+serial console (the LCD's Xspeed edit screen still shows its own
+confirmation).
+
+```
+Xgoto 1.35 cw     ->   === Xgoto ===
+                         uptime_ms            = 1234567
+                         current_position     = 0
+                         target_expansion     = 1.350
+                         resulting_expansion  = 1.350
+                         direction            = cw
+                         steps_required       = 1234
+                         current_step_count   = 0
+                         final_step_count     = 1234
+                         blade_speed_cm_s     = 0.1000
+
+XsetZero          ->   === XsetZero ===
+                         uptime_ms            = 1234567
+                         previous_position    = 4123
+                         new_position         = 0
+                         blade_speed_cm_s     = 0.1000
+
+Xspeed 0.1        ->   === Xspeed ===
+                         uptime_ms            = 1234567
+                         blade_speed_cm_s     = 0.1000
+                         step_half_period_us  = 21027
+                         current_position     = 0
+```
+
+All reports share one formatter (`src/internal/ReportFormat.h`), so the
+`key = value` columns stay aligned and every block looks identical. The
+`=` column is parse-friendly: split on the first `=` and trim.
+
+In the move report, `current_position` and `current_step_count` are the
+same quantity (steps before the move) and `steps_required` is signed
+(`final − start`), so `current_step_count + steps_required ==
+final_step_count`. `direction` (`cw`/`ccw`) echoes the commanded `Xgoto`
+token and appears only for expansion moves — not for `Xzero` or the
+return-to-centre case. `XsetZero` only resets the counter (no motion), so it
+reports just `previous_position` → `new_position`. `Xspeed` omits the
+move-only fields since the motor doesn't move. Out-of-range / unsolvable
+`Xgoto` still prints its error line instead of a report.
 
 ---
 
@@ -491,6 +561,8 @@ KisleyIrisStretcher/
 ├── README.md                        this file
 ├── BIDIRECTIONAL_XGOTO.md           why Xgoto accepts signed values
 ├── EXPERIMENTS_PLAN.md              design rationale for the experiments subsystem
+├── SERIAL_OUTPUTS.md                catalogue of every serial output the firmware emits
+├── SERIAL_CSV_FORMAT.md             parsing spec for the CSV data streams
 ├── src/
 │   ├── KisleyIrisStretcher.h        umbrella header (one include for all)
 │   ├── IrisGeometry.h

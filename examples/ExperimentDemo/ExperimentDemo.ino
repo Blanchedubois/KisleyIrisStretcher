@@ -86,8 +86,9 @@ void setup() {
 
   ui.attachRunner(runner);
   console.attachRunner(runner);
-  ui.attachStrain(strain);   // enables the LCD Xsignalavg edit screen
-  runner.attachUi(ui);       // lets the LCD refresh during motion
+  ui.attachStrain(strain);      // enables the LCD Xsignalavg edit screen
+  console.attachStrain(strain); // enables XsignalAverage/Xsamplerate serial verbs
+  runner.attachUi(ui);          // lets the LCD refresh during motion
 
   console.setBannerLine("|KisleyLab V2.1 |");
   console.begin();

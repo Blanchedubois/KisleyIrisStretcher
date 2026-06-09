@@ -121,6 +121,9 @@ void setup() {
   // Lets the Xsignalavg edit screen read + write the strain array's
   // signal-averaging value at runtime.
   ui.attachStrain(strain);
+  // Lets the serial console expose XsignalAverage/Xsamplerate (mirrors of
+  // the LCD edit screens), so LCD-echoed commands are also re-runnable.
+  console.attachStrain(strain);
 
   // Lets the runner refresh the LCD during motion (gotoExpansion blocks
   // ui.update(), so the runner's step callback is the only opportunity

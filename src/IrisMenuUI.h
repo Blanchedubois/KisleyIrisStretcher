@@ -47,6 +47,14 @@ public:
 
   void setInvertEncoder(bool on)         { _invertEncoder = on; }
   void setUseInternalPulldown(bool on)   { _useInternalPulldown = on; }
+
+  // When on (default), every GUI-triggered action echoes the equivalent
+  // serial command line to the console stream — e.g. committing the Xgoto
+  // edit screen prints "Xgoto 1.350 cw". The echoed lines use the exact
+  // X-command syntax IrisSerialConsole accepts, so they are re-runnable.
+  // Turn off to keep the serial log clean (e.g. to avoid one extra line in
+  // an active experiment CSV stream when aborting from the LCD).
+  void setEchoCommands(bool on)          { _echoCommands = on; }
   void setAboutInfo(const IrisAboutInfo& info) { _about = info; }
   void setShowSplash(bool on)            { _showSplash = on; }
   void setDetectedLcdAddress(uint8_t a)  { _lcdAddress = a; }
@@ -137,6 +145,10 @@ private:
   void drawEditXsamplerate();
   void drawEditXlogEveryN();
   void printFloatFixed(float v, uint8_t places);
+  // Echo a no-argument equivalent serial command (e.g. F("XsetZero")).
+  // No-op when _echoCommands is false. Parametrised echoes (Xgoto/Xspeed/…)
+  // are emitted inline at their commit sites.
+  void echoCommand(const __FlashStringHelper* line);
   void runCurrentItem();
   void enterHelp();
   void enterAbout();
@@ -169,9 +181,10 @@ private:
   bool           _invertEncoder = false;
   bool           _useInternalPulldown = true;
   bool           _showSplash = true;
+  bool           _echoCommands = true;  // echo GUI actions as serial commands
 
   // ---- Edit values ----
-  float _xSpeedValue = 1.0f;
+  float _xSpeedValue = 0.1f;   // seeded from geometry default in begin()
   float _xGotoValue  = 1.000f;   // magnitude, range [1.0, maxEx]
   bool  _xSpeedFineMode = false;
   bool  _xGotoFineMode  = false;

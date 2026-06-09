@@ -137,6 +137,11 @@ void IrisExperimentRunner::update() {
     }
 
     case State::STARTING: {
+      // Suppress the stretcher's intrinsic per-move report for the duration
+      // of the run — its multi-line key=value blocks would corrupt the CSV
+      // stream. Restored in DONE/ABORTING.
+      _stretcher.setMoveReporting(false);
+
       // Re-tare ADCs before every experiment so the captured strain
       // values are referenced to the rig's current pre-run baseline.
       // The motor has not started moving yet — by convention the rig
@@ -187,6 +192,7 @@ void IrisExperimentRunner::update() {
     }
 
     case State::ABORTING: {
+      _stretcher.setMoveReporting(true);   // restore intrinsic move report
       _io.println(F("# experiment aborted"));
       _state = State::IDLE;
       _curExp = nullptr;
@@ -195,6 +201,7 @@ void IrisExperimentRunner::update() {
     }
 
     case State::DONE: {
+      _stretcher.setMoveReporting(true);   // restore intrinsic move report
       _io.println(F("# experiment complete"));
       _state = State::IDLE;
       _curExp = nullptr;

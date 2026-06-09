@@ -25,12 +25,40 @@ public:
 
   void begin();
 
+  // Captured outcome of a single move, for callers (e.g. the serial
+  // console) that want to report it. Filled when a MoveResult* is passed
+  // to gotoExpansion()/goToZero(); see those methods.
+  struct MoveResult {
+    bool   ok            = false;  // false if the move was rejected
+    long   startSteps    = 0;      // signed absolute step count before the move
+    long   finalSteps    = 0;      // signed absolute step count after the move
+    long   stepsRequired = 0;      // finalSteps - startSteps (signed; dir in sign)
+    double targetEx      = 1.0;    // commanded magnitude (1.0 = center)
+    double resultingEx   = 1.0;    // computeEx() of the final commanded angle
+  };
+
   // ---- High-level motion ----
-  bool gotoExpansion(double targetEx);  // false if out of range or unreachable
-  void goToZero();                      // drive to θ = 0
-  void setZeroHere();                   // reset position counter to 0
+  // Both moves emit the structured key=value report (uptime_ms,
+  // positions, target/resulting expansion, steps, blade speed) to the
+  // serial stream by default — so the same report appears whether the
+  // command came from the serial console or the LCD GUI. Pass `out` to
+  // also capture the result programmatically. Disable the printed report
+  // with setMoveReporting(false) (the experiment runner does this so the
+  // per-waypoint moves don't pollute the CSV stream). Error lines always
+  // print regardless of the reporting flag.
+  bool gotoExpansion(double targetEx, MoveResult* out = nullptr);  // false if out of range
+  void goToZero(MoveResult* out = nullptr);                        // drive to θ = 0
+  void setZeroHere();                   // reset position counter to 0 (emits an XsetZero report)
   void calibrate();                     // runs default or registered routine
-  void setBladeSpeed(double cmPerSec);  // updates step half-period
+  // Updates the step half-period and returns it (µs). `quiet` suppresses
+  // the confirmation line.
+  unsigned long setBladeSpeed(double cmPerSec, bool quiet = false);
+
+  // Toggle the intrinsic command reports printed by gotoExpansion/goToZero
+  // (Xgoto/Xzero) and setZeroHere (XsetZero). Default on. Turned off during
+  // experiment runs and the calibration routine to keep their output clean.
+  void setMoveReporting(bool on)       { _reportMoves = on; }
+  bool moveReporting() const           { return _reportMoves; }
 
   // ---- Extension seams ----
   void setCalibrationRoutine(CalibrationRoutine cb, void* user = nullptr) {
@@ -51,6 +79,9 @@ public:
   double findTheta(double targetEx) const { return IrisKinematics::findTheta(_geo, targetEx); }
 
   // ---- Accessors ----
+  // Last blade speed (cm/s) set via setBladeSpeed(); also the geometry
+  // default applied at begin().
+  double bladeSpeedCmPerSec() const    { return _bladeSpeedCmPerSec; }
   const IrisGeometry& geometry() const { return _geo; }
   IrisGeometry&       geometry()       { return _geo; }
   IrisStepperDriver&  driver()         { return _driver; }
@@ -58,12 +89,24 @@ public:
 
 private:
   void defaultCalibration();
+  // Core rotate; `quiet` suppresses the "Moved … steps" line. Returns the
+  // signed step delta moved.
+  long _rotate(double theta, bool quiet);
+  // Emit the structured key=value move report to _io. `direction` is the
+  // commanded "cw"/"ccw" token (Xgoto); pass nullptr to omit the row
+  // (Xzero / center moves have no expansion direction).
+  void _printMoveReport(const char* cmd, unsigned long uptimeMs,
+                        long startSteps, long finalSteps, long stepsRequired,
+                        double targetEx, double resultingEx,
+                        const char* direction = nullptr);
 
   IrisGeometry        _geo;
   IrisStepperDriver   _driver;
   Stream&             _io;
   CalibrationRoutine  _calibCb   = nullptr;
   void*               _calibUser = nullptr;
+  double              _bladeSpeedCmPerSec = 0.0;  // set in begin()/setBladeSpeed()
+  bool                _reportMoves = true;        // intrinsic gotoExpansion/goToZero report
 };
 
 } // namespace iris

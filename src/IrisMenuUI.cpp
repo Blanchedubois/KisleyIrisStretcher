@@ -135,6 +135,11 @@ void IrisMenuUI::begin() {
   _items[10] = {"Xexperiments",   BuiltinKind::Experiments, nullptr, nullptr};
   _itemCount = 11;
 
+  // Open the Xspeed edit screen at the geometry's default blade speed so the
+  // displayed default matches the speed the stretcher actually booted with.
+  _xSpeedValue = constrain(_stretcher.geometry().defaultBladeSpeedCmPerSec,
+                           xSpeedMin, xSpeedMax);
+
   drawMenu();
 }
 
@@ -261,6 +266,10 @@ void IrisMenuUI::printFloatFixed(float v, uint8_t places) {
     div /= 10;
   }
   _lcd.print(fp);
+}
+
+void IrisMenuUI::echoCommand(const __FlashStringHelper* line) {
+  if (_echoCommands) _io.println(line);
 }
 
 void IrisMenuUI::drawEditXspeed() {
@@ -463,18 +472,21 @@ void IrisMenuUI::runCurrentItem() {
   switch (e.kind) {
     case BuiltinKind::XsetZero:
       drawStatus("XsetZero");
+      echoCommand(F("XsetZero"));
       _stretcher.setZeroHere();
       _statusUntilMs = millis() + 1000;
       _ui = UiState::RUNNING;
       break;
     case BuiltinKind::Xzero:
       drawStatus("Xzero");
+      echoCommand(F("Xzero"));
       _stretcher.goToZero();
       _statusUntilMs = millis() + 1000;
       _ui = UiState::RUNNING;
       break;
     case BuiltinKind::Xcalibrate:
       drawStatus("Xcalibrate");
+      echoCommand(F("Xcalibrate"));
       _stretcher.calibrate();
       _statusUntilMs = millis() + 1000;
       _ui = UiState::RUNNING;
@@ -625,6 +637,7 @@ void IrisMenuUI::update() {
       }
       if (acceptPressed && !_btnDown.isPressed()) {
         drawStatus("Xspeed set");
+        if (_echoCommands) { _io.print(F("Xspeed ")); _io.println(_xSpeedValue, 2); }
         _stretcher.setBladeSpeed(_xSpeedValue);
         _statusUntilMs = millis() + 800;
         _ui = UiState::RUNNING;
@@ -676,6 +689,11 @@ void IrisMenuUI::update() {
         drawStatus("Xgoto set");
         const double signedEx = _xGotoDirCw ? double(_xGotoValue)
                                             : -double(_xGotoValue);
+        if (_echoCommands) {
+          _io.print(F("Xgoto "));
+          _io.print(_xGotoValue, 3);
+          _io.println(_xGotoDirCw ? F(" cw") : F(" ccw"));
+        }
         _stretcher.gotoExpansion(signedEx);
         _statusUntilMs = millis() + 800;
         _ui = UiState::RUNNING;
@@ -702,6 +720,7 @@ void IrisMenuUI::update() {
         drawEditXsignalavg();
       }
       if (acceptPressed) {
+        if (_echoCommands) { _io.print(F("XsignalAverage ")); _io.println(_xSignalAvgValue); }
         if (_strain) _strain->setSignalAveraging(_xSignalAvgValue);
         drawStatus("N=");
         _lcd.print(_xSignalAvgValue);
@@ -727,6 +746,7 @@ void IrisMenuUI::update() {
       }
       if (acceptPressed) {
         if (_strain) {
+          if (_echoCommands) { _io.print(F("Xsamplerate ")); _io.println(kSampleRateSps[_xSampleRateIndex]); }
           _strain->setSampleRate(kSampleRateEnum[_xSampleRateIndex]);
           _strain->applySampleRateLive();
           drawStatus("Rate set");
@@ -761,6 +781,7 @@ void IrisMenuUI::update() {
         drawEditXlogEveryN();
       }
       if (acceptPressed) {
+        if (_echoCommands) { _io.print(F("XlogEveryN ")); _io.println(_xLogEveryNValue); }
         if (_runner) _runner->setMotionLogEveryNSteps(_xLogEveryNValue);
         drawStatus("N=");
         _lcd.print(_xLogEveryNValue);
@@ -794,6 +815,7 @@ void IrisMenuUI::update() {
       if (acceptPressed) {
         const IrisExperiment* exp = _runner->experiment(_expIndex);
         if (exp) {
+          if (_echoCommands) { _io.print(F("Xrun ")); _io.println(exp->name); }
           _runner->requestRun(*exp);
           _ui = UiState::RUNNING_EXPERIMENT;
           _lastRunStatusMs = 0;
@@ -814,7 +836,7 @@ void IrisMenuUI::update() {
         _lastRunStatusMs = now;
       }
       // MENU = abort. The runner will honour it between motion segments.
-      if (menuPressed && _runner) _runner->requestAbort();
+      if (menuPressed && _runner) { echoCommand(F("Xabort")); _runner->requestAbort(); }
       // When the runner returns to idle, pop back to the experiments submenu.
       if (_runner && !_runner->isRunning()) {
         _ui = UiState::EXPERIMENTS_MENU;
