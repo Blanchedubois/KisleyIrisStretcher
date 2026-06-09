@@ -600,3 +600,9 @@ Built for the [Kisley Lab](https://engineering.case.edu/lab/kisely-lab),
 Case Western Reserve University. The strain rig hardware verification
 and most of the design feedback came from rig-side debugging sessions —
 the "Design notes and gotchas" section is the post-mortem.
+
+---
+
+## Credits
+
+Designed and developed with [Claude Code](https://claude.com/claude-code).
